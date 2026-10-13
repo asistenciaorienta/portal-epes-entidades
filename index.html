@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="light" />
   <meta name="referrer" content="no-referrer" />
   <title>Portal EPES Entidades · Granada</title>
-  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./styles.css?v=epes-v2-20261013" />
   <script type="module" src="./app.js"></script>
 </head>
 <body>
@@ -14,10 +14,10 @@
   <header class="site-header">
     <div class="site-header-inner container">
       <a href="./" class="identity" aria-label="Inicio del Portal EPES Entidades">
-        <span class="identity-mark" aria-hidden="true">E</span>
-        <span><strong>Portal EPES Entidades</strong><small>Granada · Consulta de programas</small></span>
+        <span class="identity-mark" aria-hidden="true">EPES</span>
+        <span><strong>Portal EPES Entidades · Granada</strong><small>Servicio Andaluz de Empleo</small></span>
       </a>
-      <span class="header-label"><span class="header-dot"></span> Acceso para entidades colaboradoras</span>
+      <span class="header-label"><span class="header-dot"></span> Área de entidades colaboradoras</span>
     </div>
   </header>
 
@@ -29,12 +29,12 @@
     <section id="login-view" class="login-shell" hidden>
       <div class="login-intro">
         <p class="eyebrow"><span class="eyebrow-line"></span> ENTIDADES COLABORADORAS</p>
-        <h1>Tu información EPES, <em>en un solo lugar.</em></h1>
-        <p>Consulta tus convenios, adendas, prácticas, incidencias y documentos firmados en un entorno de acceso restringido.</p>
+        <h1>Consulta de información <em>EPES</em></h1>
+        <p>Accede a los convenios, adendas, prácticas, incidencias y documentos firmados de tu entidad en un entorno seguro.</p>
         <div class="intro-note"><span class="intro-note-icon" aria-hidden="true">✓</span> Solo verás información de las entidades que tengas autorizadas.</div>
       </div>
       <div class="login-card">
-        <div class="card-kicker">ACCESO SEGURO</div>
+        <div class="card-kicker">ACCESO DE ENTIDADES</div>
         <h2>Iniciar sesión</h2>
         <p class="muted">Utiliza las credenciales facilitadas para tu entidad.</p>
         <form id="login-form" autocomplete="on">
@@ -45,13 +45,13 @@
           <p id="login-error" class="form-error" hidden role="alert"></p>
           <button class="btn btn-primary login-submit" type="submit" id="login-button">Entrar al portal <span aria-hidden="true">→</span></button>
         </form>
-        <div class="privacy-hint"><span aria-hidden="true">🔒</span> Tu sesión se valida mediante Supabase Auth. Este portal no guarda contraseñas propias.</div>
+        <div class="privacy-hint"><span aria-hidden="true">🔒</span> Acceso restringido. La identificación se realiza mediante Supabase Auth y los permisos se verifican para cada entidad.</div>
       </div>
     </section>
 
     <section id="dashboard-view" hidden>
       <div class="dashboard-heading">
-        <div><p class="eyebrow">ÁREA PRIVADA · EPES</p><h1>Panel de la entidad</h1><p class="muted" id="welcome-line">Información actualizada desde EPES Granada.</p></div>
+        <div><p class="eyebrow">GESTIÓN EPES · ENTIDADES COLABORADORAS</p><h1>Panel de la entidad</h1><p class="muted" id="welcome-line">Información actualizada desde EPES Granada.</p></div>
         <div class="header-actions"><button id="refresh-button" class="btn btn-secondary" type="button">Actualizar</button><button id="logout-button" class="btn btn-quiet" type="button">Cerrar sesión</button></div>
       </div>
       <div class="entity-strip">

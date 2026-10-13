@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="light" />
+  <meta name="referrer" content="no-referrer" />
+  <title>Portal EPES Entidades · Granada</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <div class="page-glow" aria-hidden="true"></div>
+  <header class="site-header">
+    <div class="site-header-inner container">
+      <a href="./" class="identity" aria-label="Inicio del Portal EPES Entidades">
+        <span class="identity-mark" aria-hidden="true">E</span>
+        <span><strong>Portal EPES Entidades</strong><small>Granada · Consulta de programas</small></span>
+      </a>
+      <span class="header-label"><span class="header-dot"></span> Acceso para entidades colaboradoras</span>
+    </div>
+  </header>
+
+  <main class="container main-content">
+    <section id="config-error" class="notice notice-warning" hidden role="alert">
+      <strong>Configuración pendiente.</strong> Para conectar este portal, completa <code>config.js</code> con la URL de Supabase y su clave pública (publishable/anon). Nunca incluyas una clave <code>service_role</code> o <code>secret</code>.
+    </section>
+
+    <section id="login-view" class="login-shell" hidden>
+      <div class="login-intro">
+        <p class="eyebrow"><span class="eyebrow-line"></span> ENTIDADES COLABORADORAS</p>
+        <h1>Tu información EPES, <em>en un solo lugar.</em></h1>
+        <p>Consulta tus convenios, adendas, prácticas, incidencias y documentos firmados en un entorno de acceso restringido.</p>
+        <div class="intro-note"><span class="intro-note-icon" aria-hidden="true">✓</span> Solo verás información de las entidades que tengas autorizadas.</div>
+      </div>
+      <div class="login-card">
+        <div class="card-kicker">ACCESO SEGURO</div>
+        <h2>Iniciar sesión</h2>
+        <p class="muted">Utiliza las credenciales facilitadas para tu entidad.</p>
+        <form id="login-form" autocomplete="on">
+          <label for="email">Correo electrónico</label>
+          <input id="email" name="email" type="email" autocomplete="username" required placeholder="tu.correo@entidad.es" />
+          <label for="password">Contraseña</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" required placeholder="Introduce tu contraseña" />
+          <p id="login-error" class="form-error" hidden role="alert"></p>
+          <button class="btn btn-primary login-submit" type="submit" id="login-button">Entrar al portal <span aria-hidden="true">→</span></button>
+        </form>
+        <div class="privacy-hint"><span aria-hidden="true">🔒</span> Tu sesión se valida mediante Supabase Auth. Este portal no guarda contraseñas propias.</div>
+      </div>
+    </section>
+
+    <section id="dashboard-view" hidden>
+      <div class="dashboard-heading">
+        <div><p class="eyebrow">ÁREA PRIVADA · EPES</p><h1>Panel de la entidad</h1><p class="muted" id="welcome-line">Información actualizada desde EPES Granada.</p></div>
+        <div class="header-actions"><button id="refresh-button" class="btn btn-secondary" type="button">Actualizar</button><button id="logout-button" class="btn btn-quiet" type="button">Cerrar sesión</button></div>
+      </div>
+      <div class="entity-strip">
+        <div><span class="field-label">ENTIDAD AUTORIZADA</span><strong id="entity-name">—</strong></div>
+        <div class="entity-selector-group"><label for="entity-select">Seleccionar entidad</label><select id="entity-select" aria-label="Entidad autorizada"></select></div>
+      </div>
+      <p id="global-message" class="notice" hidden role="status"></p>
+      <section class="stats" aria-label="Resumen de registros">
+        <div class="stat"><span>Convenios</span><strong id="count-convenios">—</strong><small>Disponibles para consulta</small></div>
+        <div class="stat"><span>Adendas</span><strong id="count-adendas">—</strong><small>Vinculadas a tu entidad</small></div>
+        <div class="stat"><span>Prácticas</span><strong id="count-practicas">—</strong><small>Registros publicados</small></div>
+        <div class="stat"><span>Incidencias</span><strong id="count-incidencias">—</strong><small>Información registrada</small></div>
+        <div class="stat stat-doc"><span>PDF firmados</span><strong id="count-documentos">—</strong><small>Descarga protegida</small></div>
+      </section>
+      <div class="workspace">
+        <nav class="tabs" aria-label="Secciones del portal">
+          <button type="button" class="tab is-active" data-tab="convenios" aria-current="page">Convenios</button>
+          <button type="button" class="tab" data-tab="adendas">Adendas</button>
+          <button type="button" class="tab" data-tab="practicas">Prácticas</button>
+          <button type="button" class="tab" data-tab="incidencias">Incidencias</button>
+          <button type="button" class="tab" data-tab="documentos">Documentos firmados</button>
+        </nav>
+        <section class="records-panel" aria-labelledby="section-title">
+          <div class="records-heading"><div><p class="eyebrow" id="section-kicker">CONSULTA</p><h2 id="section-title">Convenios</h2><p id="section-description" class="muted">Relación de convenios autorizados.</p></div><span id="records-count" class="records-tag">—</span></div>
+          <div id="records-status" class="inline-status" role="status" aria-live="polite"></div>
+          <div id="records-content"></div>
+          <div id="pagination" class="pagination" hidden><span id="pagination-status" class="muted"></span><div><button id="prev-page" class="btn btn-secondary" type="button">Anterior</button><button id="next-page" class="btn btn-secondary" type="button">Siguiente</button></div></div>
+        </section>
+      </div>
+      <p class="disclaimer">Portal de consulta. Los datos proceden del sistema EPES y se muestran según los permisos asociados a tu usuario. Esta versión no permite modificar registros.</p>
+    </section>
+  </main>
+
+  <dialog id="detail-dialog" class="detail-dialog" aria-labelledby="detail-title">
+    <div class="dialog-header"><div><span class="card-kicker">DETALLE DEL REGISTRO</span><h2 id="detail-title">Información</h2></div><button id="close-dialog" type="button" class="close-button" aria-label="Cerrar detalle">×</button></div>
+    <div id="detail-content" class="detail-list"></div>
+    <div class="dialog-footer"><button id="close-dialog-footer" class="btn btn-secondary" type="button">Cerrar</button></div>
+  </dialog>
+
+  <footer class="site-footer"><div class="container"><span>Portal EPES Entidades · Granada</span><span>Acceso restringido a información autorizada</span></div></footer>
+</body>
+</html>

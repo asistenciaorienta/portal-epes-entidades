@@ -6,8 +6,8 @@
   <meta name="color-scheme" content="light" />
   <meta name="referrer" content="no-referrer" />
   <title>Portal EPES Entidades · Granada</title>
-  <link rel="stylesheet" href="./styles.css?v=epes-v3-20261013" />
-  <script type="module" src="./app.js?v=epes-v3-20261013"></script>
+  <link rel="stylesheet" href="./styles.css?v=epes-v5-20261014" />
+  <script type="module" src="./app.js?v=epes-v5-20261014"></script>
 </head>
 <body>
   <div class="page-glow" aria-hidden="true"></div>
@@ -30,7 +30,7 @@
       <div class="login-intro">
         <p class="eyebrow"><span class="eyebrow-line"></span> ENTIDADES COLABORADORAS</p>
         <h1>Consulta de información <em>EPES</em></h1>
-        <p>Accede a los convenios, adendas, prácticas, incidencias y documentos firmados de tu entidad en un entorno seguro.</p>
+        <p>Accede a los convenios, adendas, prácticas e incidencias de tu entidad en un entorno seguro.</p>
         <div class="intro-note"><span class="intro-note-icon" aria-hidden="true">✓</span> Solo verás información de las entidades que tengas autorizadas.</div>
       </div>
       <div class="login-card">
@@ -64,7 +64,6 @@
         <button class="stat stat-filter" type="button" data-stat-section="adendas" aria-pressed="false"><span>Adendas <span class="stat-arrow" aria-hidden="true">↗</span></span><strong id="count-adendas">—</strong><small>Ver adendas autorizadas</small></button>
         <button class="stat stat-filter" type="button" data-stat-section="practicas" aria-pressed="false"><span>Prácticas <span class="stat-arrow" aria-hidden="true">↗</span></span><strong id="count-practicas">—</strong><small>Ver prácticas de la entidad</small></button>
         <button class="stat stat-filter stat-incidencias" type="button" data-stat-section="incidencias" aria-pressed="false"><span>Incidencias <span class="stat-arrow" aria-hidden="true">↗</span></span><strong id="count-incidencias">—</strong><small id="incidencias-caption">Consultar incidencias registradas</small></button>
-        <button class="stat stat-filter stat-doc" type="button" data-stat-section="documentos" aria-pressed="false"><span>PDF firmados <span class="stat-arrow" aria-hidden="true">↗</span></span><strong id="count-documentos">—</strong><small>Descarga privada de documentos</small></button>
       </section>
       <section class="search-panel" aria-labelledby="search-title">
         <div class="search-heading"><div><p class="eyebrow">BÚSQUEDA GENERAL</p><h2 id="search-title">Buscar información de la entidad</h2><p class="muted">Localiza convenios, empresas o prácticas, siempre dentro de tus entidades autorizadas.</p></div><span class="search-hint">Búsqueda protegida</span></div>
@@ -85,10 +84,9 @@
           <button type="button" class="tab" data-tab="adendas">Adendas</button>
           <button type="button" class="tab" data-tab="practicas">Prácticas</button>
           <button type="button" class="tab" data-tab="incidencias">Incidencias</button>
-          <button type="button" class="tab" data-tab="documentos">Documentos firmados</button>
         </nav>
         <section class="records-panel" aria-labelledby="section-title">
-          <div class="records-heading"><div><p class="eyebrow" id="section-kicker">CONSULTA</p><h2 id="section-title">Convenios</h2><p id="section-description" class="muted">Relación de convenios autorizados.</p></div><div class="records-tools"><button id="clear-convenio-filter" type="button" class="btn btn-secondary" hidden>Mostrar todos los convenios</button><span id="records-count" class="records-tag">—</span></div></div>
+          <div class="records-heading"><div><p class="eyebrow" id="section-kicker">CONSULTA</p><h2 id="section-title">Convenios</h2><p id="section-description" class="muted">Relación de convenios autorizados. Pulsa un registro para consultar sus incidencias y firmas.</p></div><div class="records-tools"><button id="clear-convenio-filter" type="button" class="btn btn-secondary" hidden>Mostrar todos los convenios</button><span id="records-count" class="records-tag">—</span></div></div>
           <div id="records-status" class="inline-status" role="status" aria-live="polite"></div>
           <div id="records-content"></div>
           <div id="pagination" class="pagination" hidden><span id="pagination-status" class="muted"></span><div><button id="prev-page" class="btn btn-secondary" type="button">Anterior</button><button id="next-page" class="btn btn-secondary" type="button">Siguiente</button></div></div>

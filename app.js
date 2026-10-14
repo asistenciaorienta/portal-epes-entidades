@@ -1,8 +1,10 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './config.js';
 
-// V1 de consulta: sin APIs propias, sin credenciales privilegiadas y sin escrituras de datos.
+// V3 de consulta: sin APIs propias, sin credenciales privilegiadas y sin escrituras de datos.
 const PAGE_SIZE = 20;
+const PRACTICES_PAGE_SIZE = 15;
+const SEARCH_RESULT_LIMIT = 30;
 const SECTIONS = {
   convenios: {
     title: 'Convenios', description: 'Convenios de la entidad publicados en EPES.', key: 'id_convenio',
@@ -38,7 +40,7 @@ const LABELS = {
 };
 
 const el = (id) => document.getElementById(id);
-const state = { supabase: null, user: null, entities: [], entity: null, section: 'convenios', page: 0, requestId: 0, count: 0 };
+const state = { supabase: null, user: null, entities: [], entity: null, section: 'convenios', page: 0, requestId: 0, searchId: 0, count: 0, convenioFilter: null };
 
 function validateConfig() {
   if (!SUPABASE_URL?.startsWith('https://') || !SUPABASE_PUBLISHABLE_KEY?.trim()) return false;
@@ -70,6 +72,8 @@ function showLogin(message = '') {
   state.user = null;
   state.entities = [];
   state.entity = null;
+  state.convenioFilter = null;
+  clearSearch();
   el('dashboard-view').hidden = true;
   el('login-view').hidden = false;
   el('login-error').hidden = !message;
@@ -150,6 +154,8 @@ async function applyUser(user) {
   state.entity = entities[0].id_entidad;
   state.section = 'convenios';
   state.page = 0;
+  state.convenioFilter = null;
+  clearSearch();
   el('welcome-line').textContent = `${profile.nombre || profile.email || user.email || 'Usuario autorizado'} · Consulta de información EPES Granada`;
   const selector = el('entity-select');
   selector.replaceChildren();
@@ -179,6 +185,11 @@ function markActiveTab() {
     if (active) btn.setAttribute('aria-current', 'page');
     else btn.removeAttribute('aria-current');
   }
+  for (const btn of document.querySelectorAll('[data-stat-section]')) {
+    const active = btn.dataset.statSection === state.section;
+    btn.classList.toggle('is-selected', active);
+    btn.setAttribute('aria-pressed', String(active));
+  }
 }
 
 async function loadCounts() {
@@ -198,6 +209,12 @@ async function loadCounts() {
     if (result.status === 'fulfilled') el(`count-${metrics[i]}`).textContent = result.value.toLocaleString('es-ES');
     else { failed = true; el(`count-${metrics[i]}`).textContent = '—'; }
   }
+  const resultIncidencias = results[metrics.indexOf('incidencias')];
+  const hayIncidencias = resultIncidencias.status === 'fulfilled' && resultIncidencias.value > 0;
+  el('count-incidencias').closest('.stat').classList.toggle('has-incidents', hayIncidencias);
+  el('incidencias-caption').textContent = hayIncidencias
+    ? `${resultIncidencias.value.toLocaleString('es-ES')} incidencia${resultIncidencias.value === 1 ? '' : 's'} registrada${resultIncidencias.value === 1 ? '' : 's'} · consultar`
+    : 'Sin incidencias registradas';
   if (failed) showMessage('No se han podido cargar todos los contadores. Comprueba tu conexión o tus permisos.', true);
 }
 
@@ -224,6 +241,128 @@ function showDetails(row, section) {
   }
   el('detail-dialog').showModal();
 }
+
+function makeButton(label, className, handler) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = className;
+  button.textContent = label;
+  button.addEventListener('click', handler);
+  return button;
+}
+
+// Carga bajo demanda: ninguna práctica de otros convenios ni de otras entidades.
+async function renderPracticasConvenio(convenio, panel, page = 0) {
+  const entityId = state.entity;
+  const convenioId = convenio.id_convenio;
+  panel.replaceChildren();
+  const loading = document.createElement('p');
+  loading.className = 'muted';
+  loading.textContent = 'Cargando prácticas asociadas…';
+  panel.append(loading);
+  try {
+    const { data, error, count } = await state.supabase.from('practicas')
+      .select('*', { count: 'exact' })
+      .eq('id_entidad', entityId)
+      .eq('id_convenio', convenioId)
+      .order('id_practica', { ascending: false })
+      .range(page * PRACTICES_PAGE_SIZE, (page + 1) * PRACTICES_PAGE_SIZE - 1);
+    if (error) throw error;
+    if (!panel.isConnected || entityId !== state.entity || !state.user) return;
+    const records = data || [];
+    panel.replaceChildren();
+    const heading = document.createElement('div');
+    heading.className = 'convenio-expanded-head';
+    const h = document.createElement('strong');
+    h.textContent = `Prácticas del convenio ${convenioId}`;
+    const counter = document.createElement('span');
+    counter.className = 'records-tag';
+    counter.textContent = `${count ?? records.length} práctica${(count ?? records.length) === 1 ? '' : 's'}`;
+    heading.append(h, counter);
+    panel.append(heading);
+    if (!records.length) {
+      const msg = document.createElement('p');
+      msg.className = 'muted';
+      msg.textContent = 'Este convenio no tiene prácticas publicadas.';
+      panel.append(msg);
+      return;
+    }
+    const scroll = document.createElement('div');
+    scroll.className = 'data-wrap';
+    const table = document.createElement('table');
+    table.className = 'convenio-expanded-table';
+    const keys = ['id_practica', 'fecha_inicio', 'fecha_fin', 'estado'].filter((key) => Object.hasOwn(records[0], key));
+    const trh = document.createElement('tr');
+    for (const key of keys) {
+      const th = document.createElement('th');
+      th.textContent = niceLabel(key);
+      trh.append(th);
+    }
+    const actionHead = document.createElement('th');
+    actionHead.textContent = 'Detalle';
+    trh.append(actionHead);
+    const thead = document.createElement('thead');
+    thead.append(trh);
+    table.append(thead);
+    const tbody = document.createElement('tbody');
+    for (const practice of records) {
+      const tr = document.createElement('tr');
+      for (const key of keys) {
+        const td = document.createElement('td');
+        td.textContent = cellText(practice[key], 45);
+        tr.append(td);
+      }
+      const actions = document.createElement('td');
+      actions.append(makeButton('Ver detalle', 'link-action', () => showDetails(practice, 'practicas')));
+      tr.append(actions);
+      tbody.append(tr);
+    }
+    table.append(tbody);
+    scroll.append(table);
+    panel.append(scroll);
+    if ((count ?? records.length) > PRACTICES_PAGE_SIZE) {
+      const pager = document.createElement('div');
+      pager.className = 'convenio-expanded-pagination';
+      const status = document.createElement('span');
+      status.textContent = `${page * PRACTICES_PAGE_SIZE + 1}–${page * PRACTICES_PAGE_SIZE + records.length} de ${count}`;
+      const controls = document.createElement('div');
+      controls.className = 'search-result-actions';
+      const prev = makeButton('Anterior', 'btn btn-secondary', () => renderPracticasConvenio(convenio, panel, page - 1));
+      prev.disabled = page === 0;
+      const next = makeButton('Siguiente', 'btn btn-secondary', () => renderPracticasConvenio(convenio, panel, page + 1));
+      next.disabled = (page + 1) * PRACTICES_PAGE_SIZE >= count;
+      controls.append(prev, next);
+      pager.append(status, controls);
+      panel.append(pager);
+    }
+  } catch (error) {
+    if (panel.isConnected && entityId === state.entity) panel.replaceChildren(errorPanel(displayError(error)));
+  }
+}
+
+function togglePracticasConvenio(row, tr, button) {
+  const old = tr.nextElementSibling;
+  if (old?.classList.contains('convenio-expanded-row')) {
+    const visible = !old.hidden;
+    old.hidden = visible;
+    button.setAttribute('aria-expanded', String(!visible));
+    button.textContent = visible ? 'Ver prácticas' : 'Ocultar prácticas';
+    return;
+  }
+  const expanded = document.createElement('tr');
+  expanded.className = 'convenio-expanded-row';
+  const td = document.createElement('td');
+  td.colSpan = tr.children.length;
+  const panel = document.createElement('div');
+  panel.className = 'convenio-expanded-panel';
+  td.append(panel);
+  expanded.append(td);
+  tr.after(expanded);
+  button.setAttribute('aria-expanded', 'true');
+  button.textContent = 'Ocultar prácticas';
+  void renderPracticasConvenio(row, panel);
+}
+
 function renderTable(rows, section) {
   const columns = columnsFor(rows, section);
   const wrapper = document.createElement('div');
@@ -260,7 +399,18 @@ function renderTable(rows, section) {
     button.className = 'link-action';
     button.textContent = 'Ver detalle';
     button.addEventListener('click', () => showDetails(row, section));
-    action.append(button);
+    if (section === 'convenios') {
+      const group = document.createElement('div');
+      group.className = 'convenio-actions';
+      group.append(button);
+      const showPractices = makeButton('Ver prácticas', 'convenio-expand-button', () => togglePracticasConvenio(row, tr, showPractices));
+      showPractices.dataset.practicasConvenio = row.id_convenio;
+      showPractices.setAttribute('aria-expanded', 'false');
+      group.append(showPractices);
+      action.append(group);
+    } else {
+      action.append(button);
+    }
     tr.append(action);
     tbody.append(tr);
   }
@@ -335,16 +485,21 @@ async function loadSection() {
   const page = state.page;
   const spec = SECTIONS[section];
   el('section-title').textContent = spec.title;
-  el('section-description').textContent = spec.description;
+  el('section-description').textContent = section === 'convenios' && state.convenioFilter
+    ? `Prácticas y datos del convenio ${state.convenioFilter}.`
+    : spec.description;
+  el('clear-convenio-filter').hidden = !(section === 'convenios' && state.convenioFilter);
   el('section-kicker').textContent = `CONSULTA · ${entityId}`;
   el('records-count').textContent = '…';
   el('records-status').textContent = 'Cargando registros…';
   el('records-content').replaceChildren();
   el('pagination').hidden = true;
   try {
-    const { data, error, count } = await state.supabase.from(section)
+    let query = state.supabase.from(section)
       .select('*', { count: 'exact' })
-      .eq('id_entidad', entityId)
+      .eq('id_entidad', entityId);
+    if (section === 'convenios' && state.convenioFilter) query = query.eq('id_convenio', state.convenioFilter);
+    const { data, error, count } = await query
       .order(spec.key, { ascending: false })
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
     if (error) throw error;
@@ -365,6 +520,138 @@ async function loadSection() {
     el('records-status').textContent = '';
     el('records-count').textContent = 'Error';
     el('records-content').replaceChildren(errorPanel(displayError(error)));
+  }
+}
+
+
+function clearSearch() {
+  state.searchId++;
+  el('global-search-button').disabled = false;
+  el('global-search-input').value = '';
+  el('global-search-scope').value = 'todos';
+  el('global-search-status').textContent = '';
+  el('global-search-results').hidden = true;
+  el('global-search-results').replaceChildren();
+}
+
+function setSearchStatus(message) {
+  el('global-search-status').textContent = message;
+}
+
+async function jumpToConvenio(id, showPractices = false) {
+  state.section = 'convenios';
+  state.page = 0;
+  state.convenioFilter = id;
+  markActiveTab();
+  await loadSection();
+  el('records-count').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  if (showPractices) {
+    const button = [...document.querySelectorAll('[data-practicas-convenio]')]
+      .find((candidate) => candidate.dataset.practicasConvenio === id);
+    button?.click();
+  }
+}
+
+function appendSearchGroup(target, title, rows, section) {
+  if (!rows.length) return;
+  const heading = document.createElement('h3');
+  heading.textContent = `${title} · ${rows.length} resultado${rows.length === 1 ? '' : 's'}`;
+  target.append(heading);
+  for (const row of rows) {
+    const item = document.createElement('div');
+    item.className = 'search-result';
+    const main = document.createElement('div');
+    main.className = 'search-result-main';
+    const text = document.createElement('strong');
+    const summary = document.createElement('small');
+    if (section === 'convenios') {
+      text.textContent = `${row.id_convenio || 'Convenio'} · ${row.nombre_empresa || 'Empresa no indicada'}`;
+      summary.textContent = `CIF: ${row.cif_empresa || '—'} · Convenio ${row.id_convenio || '—'}`;
+    } else {
+      text.textContent = `Práctica ${row.id_practica || '—'}`;
+      summary.textContent = `Convenio ${row.id_convenio || '—'} · Inicio ${formatted(row.fecha_inicio)} · Fin ${formatted(row.fecha_fin)}`;
+    }
+    main.append(text, summary);
+    const actions = document.createElement('div');
+    actions.className = 'search-result-actions';
+    actions.append(makeButton('Ver detalle', 'btn btn-secondary', () => showDetails(row, section)));
+    if (section === 'convenios') {
+      actions.append(makeButton('Ver prácticas del convenio', 'btn btn-secondary', () => jumpToConvenio(row.id_convenio, true)));
+    } else if (row.id_convenio) {
+      actions.append(makeButton('Ver convenio', 'btn btn-secondary', () => jumpToConvenio(row.id_convenio)));
+    }
+    item.append(main, actions);
+    target.append(item);
+  }
+}
+
+// Búsqueda con filtros server-side, paginación limitada y RLS aplicadas por Supabase.
+// No se descargan todos los convenios/prácticas al navegador.
+async function globalSearch(event) {
+  event?.preventDefault();
+  const searchText = el('global-search-input').value.trim();
+  const scope = el('global-search-scope').value;
+  const entityId = state.entity;
+  const requestId = ++state.searchId;
+  const target = el('global-search-results');
+  target.replaceChildren();
+  target.hidden = true;
+  if (!entityId) return;
+  if (searchText.length < 2) {
+    setSearchStatus('Introduce al menos dos caracteres para buscar.');
+    return;
+  }
+  el('global-search-button').disabled = true;
+  setSearchStatus('Buscando información autorizada…');
+  try {
+    const pattern = `%${searchText}%`;
+    const queries = [];
+    if (scope === 'todos' || scope === 'convenios' || scope === 'empresas') {
+      const fields = scope === 'convenios' ? ['id_convenio'] : scope === 'empresas' ? ['nombre_empresa', 'cif_empresa'] : ['id_convenio', 'nombre_empresa', 'cif_empresa'];
+      for (const field of fields) {
+        queries.push({ kind: 'convenios', field, work: state.supabase.from('convenios')
+          .select('*').eq('id_entidad', entityId).ilike(field, pattern)
+          .order('id_convenio', { ascending: false }).limit(SEARCH_RESULT_LIMIT) });
+      }
+    }
+    if (scope === 'todos' || scope === 'practicas') {
+      for (const field of ['id_practica', 'id_convenio']) {
+        queries.push({ kind: 'practicas', field, work: state.supabase.from('practicas')
+          .select('*').eq('id_entidad', entityId).ilike(field, pattern)
+          .order('id_practica', { ascending: false }).limit(SEARCH_RESULT_LIMIT) });
+      }
+    }
+    const answers = await Promise.all(queries.map((q) => q.work));
+    if (requestId !== state.searchId || entityId !== state.entity) return;
+    const found = { convenios: new Map(), practicas: new Map() };
+    for (let i = 0; i < answers.length; i++) {
+      const { data, error } = answers[i];
+      if (error) throw error;
+      for (const row of data || []) {
+        const key = queries[i].kind === 'convenios' ? row.id_convenio : row.id_practica;
+        if (key != null) found[queries[i].kind].set(String(key), row);
+      }
+    }
+    const convenios = [...found.convenios.values()].slice(0, SEARCH_RESULT_LIMIT);
+    const practicas = [...found.practicas.values()].slice(0, SEARCH_RESULT_LIMIT);
+    const total = convenios.length + practicas.length;
+    target.hidden = false;
+    if (!total) {
+      target.append(emptyPanel());
+      setSearchStatus('No se encontraron coincidencias en la entidad seleccionada.');
+      return;
+    }
+    appendSearchGroup(target, scope === 'empresas' ? 'Empresas / convenios asociados' : 'Convenios y empresas', convenios, 'convenios');
+    appendSearchGroup(target, 'Prácticas', practicas, 'practicas');
+    const limited = answers.some((a) => (a.data || []).length === SEARCH_RESULT_LIMIT);
+    setSearchStatus(`${total} coincidencia${total === 1 ? '' : 's'} mostrada${total === 1 ? '' : 's'}.${limited ? ' Resultados limitados: concreta la búsqueda para localizar otros registros.' : ''}`);
+  } catch (error) {
+    if (requestId !== state.searchId || entityId !== state.entity) return;
+    target.hidden = false;
+    target.replaceChildren(errorPanel(displayError(error)));
+    setSearchStatus('La búsqueda no se ha podido completar.');
+  } finally {
+    if (requestId === state.searchId) el('global-search-button').disabled = false;
   }
 }
 
@@ -407,6 +694,8 @@ function initEvents() {
     if (!state.entities.some((x) => x.id_entidad === next)) return;
     state.entity = next;
     state.page = 0;
+    state.convenioFilter = null;
+    clearSearch();
     updateEntityHeading();
     showMessage('');
     await Promise.all([loadCounts(), loadSection()]);
@@ -416,10 +705,29 @@ function initEvents() {
       if (!SECTIONS[button.dataset.tab]) return;
       state.section = button.dataset.tab;
       state.page = 0;
+      state.convenioFilter = null;
       markActiveTab();
       await loadSection();
     });
   }
+  for (const button of document.querySelectorAll('[data-stat-section]')) {
+    button.addEventListener('click', async () => {
+      if (!state.entity || !SECTIONS[button.dataset.statSection]) return;
+      state.section = button.dataset.statSection;
+      state.page = 0;
+      state.convenioFilter = null;
+      markActiveTab();
+      await loadSection();
+      el('records-count').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }
+  el('clear-convenio-filter').addEventListener('click', async () => {
+    state.convenioFilter = null;
+    state.page = 0;
+    await loadSection();
+  });
+  el('global-search-form').addEventListener('submit', globalSearch);
+  el('global-search-clear').addEventListener('click', clearSearch);
   el('prev-page').addEventListener('click', async () => { if (state.page > 0) { state.page--; await loadSection(); } });
   el('next-page').addEventListener('click', async () => { if ((state.page + 1) * PAGE_SIZE < state.count) { state.page++; await loadSection(); } });
   el('close-dialog').addEventListener('click', () => el('detail-dialog').close());
@@ -427,6 +735,14 @@ function initEvents() {
 }
 
 async function start() {
+  const logo = el('epes-logo');
+  const mark = logo?.closest('.identity-mark');
+  if (logo && mark) {
+    const loaded = () => { if (logo.naturalWidth > 0) mark.classList.add('has-logo'); };
+    logo.addEventListener('load', loaded);
+    logo.addEventListener('error', () => mark.classList.remove('has-logo'));
+    if (logo.complete) loaded();
+  }
   initEvents();
   if (!validateConfig()) {
     el('config-error').hidden = false;

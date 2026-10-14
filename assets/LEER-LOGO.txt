@@ -1,0 +1,1 @@
+Coloca en esta carpeta el archivo original del servidor /var/www/epes/images/logo_epes.png con el nombre logo_epes.png. La web mostrara EPES como fallback hasta que se copie.

@@ -332,3 +332,30 @@
 @media(max-width:480px) {
   .incidencias-pendientes-table tbody > tr > td { grid-template-columns:minmax(83px,33%) minmax(0,1fr); gap:7px; }
 }
+
+
+/* EPES V8.6 · Avisos de novedades por usuario y entidad. */
+.epes-news-panel { margin:0 0 22px; padding:20px 22px; border:1px solid #cfdfeb; border-left:5px solid #1f5078; border-radius:14px; background:#fff; box-shadow:0 5px 19px rgba(31,80,120,.07); }
+.epes-news-panel[hidden] { display:none!important; }
+.epes-news-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:14px; }
+.epes-news-heading .eyebrow { margin:0 0 6px; }
+.epes-news-heading h2 { font-size:clamp(19px,2vw,24px); line-height:1.2; margin:0 0 5px; }
+.epes-news-heading .muted { margin:0; }
+.epes-news-count { border:1px solid #c9dce9; background:#eef5fa; color:#1f5078; border-radius:99px; padding:6px 12px; font-size:12px; font-weight:800; }
+.epes-news-list { display:grid; gap:10px; }
+.epes-news-item { display:flex; gap:13px; padding:14px 16px; background:#f8fbfd; border:1px solid #dce9f1; border-radius:10px; min-width:0; }
+.epes-news-incidencia_resuelta { background:#f8fbf3; border-color:#dce7c4; }
+.epes-news-icon { flex:0 0 35px; width:35px; height:35px; display:grid; place-items:center; border-radius:9px; background:#e5f0f9; color:#285376; font-size:20px; font-weight:900; }
+.epes-news-incidencia_resuelta .epes-news-icon { background:#e9f2db; color:#3b641c; }
+.epes-news-body { min-width:0; flex:1; }
+.epes-news-item-head { display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:5px 13px; }
+.epes-news-item-head strong { font-size:14px; color:#203f57; }
+.epes-news-item-head time { font-size:11px; color:#637c8b; }
+.epes-news-body p { color:#476176; font-size:13px; line-height:1.6; margin:6px 0 11px; overflow-wrap:anywhere; }
+.epes-news-actions { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:11px 16px; }
+.epes-news-open { font-size:12px; padding:7px 12px; }
+.epes-news-ack { display:inline-flex; align-items:center; cursor:pointer; gap:8px; font-size:12px; font-weight:650; color:#32546b; line-height:1.4; }
+.epes-news-ack input { margin:0; width:17px; height:17px; accent-color:#1f5078; cursor:pointer; flex-shrink:0; }
+.epes-news-ack input:disabled { cursor:wait; }
+.epes-news-status:not(:empty) { padding:6px 0 11px; font-size:12px; color:#ab542b; }
+@media(max-width:580px) { .epes-news-panel { padding:15px; } .epes-news-item { padding:12px 10px; gap:9px; } .epes-news-actions { align-items:flex-start; flex-direction:column; } }

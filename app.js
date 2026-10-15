@@ -2,6 +2,7 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './config.js';
 import { downloadEphemeralPdf } from './download-on-demand.js';
 
+// V8.6: novedades por usuario y entidad, confirmación persistente en Supabase.
 // V8.5: bandeja de incidencias pendientes con 6 columnas y empresa resuelta por convenio; histórico y descargas V7 intactos.
 // V7: descarga bajo demanda para todos los documentos firmados visibles.
 // Autorización efectiva: Supabase Auth + RPC + RLS; no existe acceso anónimo.
@@ -9,7 +10,7 @@ import { downloadEphemeralPdf } from './download-on-demand.js';
 // Antes de publicar: verificar originales locales, programadores y permisos RPC.
 const EPES_ON_DEMAND_DOWNLOADS = true;
 
-// V4 de consulta: sin APIs propias, sin credenciales privilegiadas y sin escrituras de datos.
+// Consulta de EPES sin credenciales privilegiadas. La única escritura del portal registra «Ya lo he visto» en epes_novedades_vistas.
 const PAGE_SIZE = 20;
 const PRACTICES_PAGE_SIZE = 15;
 const SEARCH_RESULT_LIMIT = 30;
@@ -46,7 +47,7 @@ const LABELS = {
 };
 
 const el = (id) => document.getElementById(id);
-const state = { supabase: null, user: null, entities: [], entity: null, section: 'convenios', page: 0, requestId: 0, searchId: 0, count: 0, convenioFilter: null, pageRelations: null, detailRequestId: 0 };
+const state = { supabase: null, user: null, entities: [], entity: null, section: 'convenios', page: 0, requestId: 0, searchId: 0, count: 0, convenioFilter: null, pageRelations: null, detailRequestId: 0, novRequestId: 0 };
 
 function validateConfig() {
   if (!SUPABASE_URL?.startsWith('https://') || !SUPABASE_PUBLISHABLE_KEY?.trim()) return false;
@@ -78,6 +79,9 @@ function showLogin(message = '') {
   state.user = null;
   state.entities = [];
   state.entity = null;
+  ++state.novRequestId;
+  el('news-panel').hidden = true;
+  el('news-list').replaceChildren();
   state.convenioFilter = null;
   clearSearch();
   ++state.detailRequestId;
@@ -183,7 +187,155 @@ async function applyUser(user) {
   markActiveTab();
   showDashboard();
   showMessage('');
-  await Promise.all([loadCounts(), loadSection()]);
+  await Promise.all([loadCounts(), loadSection(), loadNovedades()]);
+}
+
+
+// EPES V8.6 · Notificaciones: solo eventos FUTUROS desde la migración SQL.
+// Leemos una RPC SECURITY INVOKER + RLS que excluye confirmaciones del usuario.
+// Ninguna marca se guarda en localStorage ni depende del navegador utilizado.
+function avisoTitulo(row) {
+  if (row.tipo === 'documento_firmado') {
+    return row.referencia?.startsWith('ADENDA:')
+      ? 'Nueva adenda firmada disponible'
+      : 'Nuevo convenio firmado disponible';
+  }
+  return 'Incidencia resuelta';
+}
+function avisoDescripcion(row) {
+  if (row.tipo === 'documento_firmado') {
+    const convenio = row.id_convenio ? ` · Convenio ${row.id_convenio}` : '';
+    return `${row.nombre_archivo || row.referencia}${convenio}`;
+  }
+  return `Incidencia ${row.referencia}` +
+    (row.id_practica ? ` · Práctica ${row.id_practica}` :
+     row.id_convenio ? ` · Convenio ${row.id_convenio}` : '');
+}
+
+async function abrirExpedienteAviso(row) {
+  if (!state.entity || !state.user) return;
+  const entityId = state.entity;
+  const userId = state.user.id;
+  let convenioId = row.id_convenio;
+  try {
+    if (!convenioId && row.id_practica) {
+      const { data, error } = await state.supabase.from('practicas')
+        .select('id_convenio')
+        .eq('id_entidad', entityId)
+        .eq('id_practica', row.id_practica)
+        .maybeSingle();
+      if (error) throw error;
+      convenioId = data?.id_convenio;
+    }
+    if (entityId !== state.entity || userId !== state.user?.id) return;
+    if (!convenioId) {
+      showMessage('La novedad no tiene un convenio identificado. Consulta el listado de convenios.', true);
+      return;
+    }
+    await jumpToConvenio(convenioId, !!row.id_practica, row.id_practica);
+  } catch (error) {
+    if (entityId === state.entity && userId === state.user?.id)
+      showMessage(`No se pudo abrir el expediente: ${displayError(error)}`, true);
+  }
+}
+
+async function marcarAvisoVisto(row, input, tarjeta) {
+  const entityId = state.entity;
+  const userId = state.user?.id;
+  if (!userId || entityId !== row.id_entidad) { input.checked = false; return; }
+  input.disabled = true;
+  try {
+    const { error } = await state.supabase.from('epes_novedades_vistas')
+      .insert({ id_novedad: row.id, user_id: userId });
+    // Un segundo dispositivo podría haber marcado el mismo aviso.
+    if (error && error.code !== '23505') throw error;
+    if (entityId !== state.entity || userId !== state.user?.id) return;
+    tarjeta.remove();
+    const restantes = el('news-list').querySelectorAll('.epes-news-item').length;
+    el('news-count').textContent = `${restantes} sin leer`;
+    if (!restantes) el('news-panel').hidden = true;
+  } catch (error) {
+    if (entityId !== state.entity || userId !== state.user?.id) return;
+    input.checked = false;
+    input.disabled = false;
+    el('news-status').textContent = `No se pudo guardar «Ya lo he visto»: ${displayError(error)}`;
+  }
+}
+
+function renderNovedades(rows) {
+  const panel = el('news-panel');
+  const list = el('news-list');
+  list.replaceChildren();
+  panel.hidden = rows.length === 0;
+  el('news-count').textContent = `${rows.length} sin leer`;
+  el('news-status').textContent = '';
+  for (const row of rows) {
+    const item = document.createElement('article');
+    item.className = `epes-news-item epes-news-${row.tipo}`;
+    const icono = document.createElement('span');
+    icono.className = 'epes-news-icon';
+    icono.setAttribute('aria-hidden','true');
+    icono.textContent = row.tipo === 'documento_firmado' ? '📄' : '✓';
+    const contenido = document.createElement('div');
+    contenido.className = 'epes-news-body';
+    const cab = document.createElement('div');
+    cab.className = 'epes-news-item-head';
+    const titulo = document.createElement('strong');
+    titulo.textContent = avisoTitulo(row);
+    const fecha = document.createElement('time');
+    fecha.dateTime = row.creado_en;
+    fecha.textContent = formatted(row.creado_en);
+    cab.append(titulo,fecha);
+    const descripcion = document.createElement('p');
+    descripcion.textContent = avisoDescripcion(row);
+    const acciones = document.createElement('div');
+    acciones.className = 'epes-news-actions';
+    if (row.id_convenio || row.id_practica) {
+      const abrir = document.createElement('button');
+      abrir.type = 'button';
+      abrir.className = 'btn btn-secondary epes-news-open';
+      abrir.textContent = 'Abrir expediente';
+      abrir.addEventListener('click', () => abrirExpedienteAviso(row));
+      acciones.append(abrir);
+    }
+    const marcar = document.createElement('label');
+    marcar.className = 'epes-news-ack';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.setAttribute('aria-label', `Ya lo he visto: ${avisoTitulo(row)} ${row.referencia}`);
+    input.addEventListener('change', () => {
+      if (input.checked) marcarAvisoVisto(row,input,item);
+    });
+    const label = document.createElement('span');
+    label.textContent = 'Ya lo he visto · No volver a mostrar';
+    marcar.append(input,label);
+    acciones.append(marcar);
+    contenido.append(cab,descripcion,acciones);
+    item.append(icono,contenido);
+    list.append(item);
+  }
+}
+
+async function loadNovedades() {
+  const entityId = state.entity;
+  const userId = state.user?.id;
+  const req = ++state.novRequestId;
+  if (!entityId || !userId) return;
+  try {
+    const { data, error } = await state.supabase.rpc('epes_mis_novedades', {
+      p_id_entidad: entityId,
+      p_limite: 30
+    });
+    if (error) throw error;
+    if (req !== state.novRequestId || entityId !== state.entity || userId !== state.user?.id) return;
+    renderNovedades(data || []);
+  } catch (error) {
+    if (req !== state.novRequestId || entityId !== state.entity || userId !== state.user?.id) return;
+    el('news-panel').hidden = false;
+    el('news-list').replaceChildren();
+    el('news-count').textContent = 'No disponible';
+    el('news-status').textContent = `No se pudieron consultar las novedades: ${displayError(error)}`;
+  }
 }
 
 function updateEntityHeading() {
@@ -1239,12 +1391,14 @@ function initEvents() {
   el('refresh-button').addEventListener('click', async () => {
     if (!state.entity) return;
     showMessage('');
-    await Promise.all([loadCounts(), loadSection()]);
+    await Promise.all([loadCounts(), loadSection(), loadNovedades()]);
   });
   el('entity-select').addEventListener('change', async (event) => {
     const next = event.target.value;
     if (!state.entities.some((x) => x.id_entidad === next)) return;
     state.entity = next;
+    ++state.novRequestId;
+    el('news-panel').hidden = true;
     ++state.detailRequestId;
     if (el('detail-dialog').open) el('detail-dialog').close();
     state.page = 0;
@@ -1252,7 +1406,7 @@ function initEvents() {
     clearSearch();
     updateEntityHeading();
     showMessage('');
-    await Promise.all([loadCounts(), loadSection()]);
+    await Promise.all([loadCounts(), loadSection(), loadNovedades()]);
   });
   for (const button of document.querySelectorAll('[data-tab]')) {
     button.addEventListener('click', async () => {

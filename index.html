@@ -6,9 +6,9 @@
   <meta name="color-scheme" content="light" />
   <meta name="referrer" content="no-referrer" />
   <title>Portal EPES Entidades · Granada</title>
-  <link rel="stylesheet" href="./styles.css?v=epes-v8-5-20261015" />
-  <link rel="stylesheet" href="./styles-v8.css?v=epes-v8-5-20261015" />
-  <script type="module" src="./app.js?v=epes-v8-5-20261015"></script>
+  <link rel="stylesheet" href="./styles.css?v=epes-v8-6-20261015" />
+  <link rel="stylesheet" href="./styles-v8.css?v=epes-v8-6-20261015" />
+  <script type="module" src="./app.js?v=epes-v8-6-20261015"></script>
 </head>
 <body>
   <div class="page-glow" aria-hidden="true"></div>
@@ -70,6 +70,14 @@
         </section>
       </div>
       <p id="global-message" class="notice" hidden role="status"></p>
+      <section id="news-panel" class="epes-news-panel" aria-labelledby="news-title" hidden>
+        <div class="epes-news-heading">
+          <div><p class="eyebrow">ACTUALIZACIONES DEL PROGRAMA</p><h2 id="news-title">Novedades de tu entidad</h2><p class="muted">Documentos firmados incorporados e incidencias que se han cerrado.</p></div>
+          <span id="news-count" class="epes-news-count">—</span>
+        </div>
+        <p id="news-status" class="epes-news-status" role="status" aria-live="polite"></p>
+        <div id="news-list" class="epes-news-list"></div>
+      </section>
       <section class="search-panel" aria-labelledby="search-title">
         <div class="search-heading">
           <div><p class="eyebrow">BÚSQUEDA GENERAL</p><h2 id="search-title">Buscar información de la entidad</h2><p class="muted">Busca por convenio, empresa, CIF, código de práctica o nombre de participante. Abriremos su expediente correspondiente.</p></div>
@@ -97,7 +105,7 @@
           <div id="pagination" class="pagination" hidden><span id="pagination-status" class="muted"></span><div><button id="prev-page" class="btn btn-secondary" type="button">Anterior</button><button id="next-page" class="btn btn-secondary" type="button">Siguiente</button></div></div>
         </section>
       </div>
-      <p class="disclaimer">Portal de consulta. Los datos proceden del sistema EPES y se muestran según los permisos asociados a tu usuario. Esta versión no permite modificar registros.</p>
+      <p class="disclaimer">Portal de consulta. Los datos proceden del sistema EPES y se muestran según los permisos asociados a tu usuario. No permite modificar convenios, prácticas ni incidencias; únicamente confirmar la lectura de novedades.</p>
     </section>
   </main>
 

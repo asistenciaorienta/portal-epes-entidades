@@ -2,8 +2,13 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './config.js';
 import { downloadEphemeralPdf } from './download-on-demand.js';
 
-// Fase de pruebas: mantener FALSE hasta validar el circuito completo con E0002.
-const USE_EPES_ON_DEMAND_DOWNLOADS = false;
+// V6: habilitación opt-in únicamente para la entidad de pruebas E0002.
+// Sin parametro, el portal conserva el acceso anterior sin cambios.
+// Este indicador solo determina la interfaz: Supabase Auth, RPC y RLS aplican
+// la autorización real en el servidor.
+const EPES_ON_DEMAND_TRIAL =
+  new URLSearchParams(window.location.search).get('epes_descarga_prueba') === '1';
+const EPES_ON_DEMAND_TRIAL_ENTITY = 'E0002';
 
 // V4 de consulta: sin APIs propias, sin credenciales privilegiadas y sin escrituras de datos.
 const PAGE_SIZE = 20;
@@ -173,7 +178,11 @@ async function applyUser(user) {
   updateEntityHeading();
   markActiveTab();
   showDashboard();
-  showMessage('');
+  showMessage(
+    EPES_ON_DEMAND_TRIAL && state.entity === EPES_ON_DEMAND_TRIAL_ENTITY
+      ? 'MODO PRUEBA E0002: las descargas de PDF firmado utilizan Ubuntu y el cifrado temporal.'
+      : ''
+  );
   await Promise.all([loadCounts(), loadSection()]);
 }
 
@@ -627,7 +636,7 @@ async function downloadDocument(row, button) {
   const originalLabel = button.textContent;
   button.textContent = 'Descargando…';
   try {
-    if (USE_EPES_ON_DEMAND_DOWNLOADS) {
+    if (EPES_ON_DEMAND_TRIAL && state.entity === EPES_ON_DEMAND_TRIAL_ENTITY) {
       const currentUser = state.user?.id;
       const currentEntity = state.entity;
       const db = state.supabase;

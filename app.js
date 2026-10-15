@@ -2,13 +2,11 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './config.js';
 import { downloadEphemeralPdf } from './download-on-demand.js';
 
-// V6: habilitación opt-in únicamente para la entidad de pruebas E0002.
-// Sin parametro, el portal conserva el acceso anterior sin cambios.
-// Este indicador solo determina la interfaz: Supabase Auth, RPC y RLS aplican
-// la autorización real en el servidor.
-const EPES_ON_DEMAND_TRIAL =
-  new URLSearchParams(window.location.search).get('epes_descarga_prueba') === '1';
-const EPES_ON_DEMAND_TRIAL_ENTITY = 'E0002';
+// V7: descarga bajo demanda para todos los documentos firmados visibles.
+// Autorización efectiva: Supabase Auth + RPC + RLS; no existe acceso anónimo.
+// El portal NO recurre automáticamente al bucket permanente si falla el circuito.
+// Antes de publicar: verificar originales locales, programadores y permisos RPC.
+const EPES_ON_DEMAND_DOWNLOADS = true;
 
 // V4 de consulta: sin APIs propias, sin credenciales privilegiadas y sin escrituras de datos.
 const PAGE_SIZE = 20;
@@ -178,11 +176,7 @@ async function applyUser(user) {
   updateEntityHeading();
   markActiveTab();
   showDashboard();
-  showMessage(
-    EPES_ON_DEMAND_TRIAL && state.entity === EPES_ON_DEMAND_TRIAL_ENTITY
-      ? 'MODO PRUEBA E0002: las descargas de PDF firmado utilizan Ubuntu y el cifrado temporal.'
-      : ''
-  );
+  showMessage('');
   await Promise.all([loadCounts(), loadSection()]);
 }
 
@@ -621,47 +615,44 @@ function renderTable(rows, section) {
   table.append(tbody); wrapper.append(table); return wrapper;
 }
 
-function safeDownloadName(name) {
-  const plain = String(name || 'documento.pdf').split('/').pop().replace(/[\\:*?"<>|\x00-\x1f]/g, '_');
-  return (plain || 'documento.pdf').slice(0, 160);
-}
 async function downloadDocument(row, button) {
-  // Verificaciones preventivas de cliente. La verdadera autorización es RLS Storage.
-  if (row.id_entidad !== state.entity || row.storage_bucket !== 'epes-documentos' ||
-      !row.storage_path?.startsWith(`${state.entity}/`)) {
-    showMessage('Este documento no corresponde a la entidad seleccionada.', true);
+  // Validaciones adicionales de cliente, nunca sustituyen Auth/RLS/RPC.
+  // Durante la migración conservamos metadatos antiguos de epes-documentos,
+  // pero el PDF se obtiene siempre del origen local mediante solicitud segura.
+  if (!state.user || !state.supabase || row.id_entidad !== state.entity ||
+      !/^(CONVENIO:|ADENDA:)/.test(String(row.clave_documento || '')) ||
+      (row.storage_bucket && row.storage_bucket !== 'epes-documentos') ||
+      (row.storage_path && !row.storage_path.startsWith(`${state.entity}/`))) {
+    showMessage('El documento no está autorizado para la entidad seleccionada.', true);
+    return;
+  }
+  if (!EPES_ON_DEMAND_DOWNLOADS) {
+    showMessage('Las descargas bajo demanda no están habilitadas.', true);
     return;
   }
   button.disabled = true;
   const originalLabel = button.textContent;
-  button.textContent = 'Descargando…';
+  button.textContent = 'Preparando PDF…';
+  const currentUser = state.user.id;
+  const currentEntity = state.entity;
+  const db = state.supabase;
   try {
-    if (EPES_ON_DEMAND_TRIAL && state.entity === EPES_ON_DEMAND_TRIAL_ENTITY) {
-      const currentUser = state.user?.id;
-      const currentEntity = state.entity;
-      const db = state.supabase;
-      await downloadEphemeralPdf({
-        db,
-        userId: currentUser,
-        documentRow: row,
-        isCurrent: () => state.user?.id === currentUser && state.entity === currentEntity && state.supabase === db,
-        onStatus: (message) => { if (state.user?.id === currentUser && state.entity === currentEntity) showMessage(message); },
-      });
-      return;
-    }
-    const { data, error } = await state.supabase.storage.from(row.storage_bucket).download(row.storage_path);
-    if (error || !data) throw error || new Error('No se pudo descargar el documento.');
-    const objectUrl = URL.createObjectURL(data);
-    const anchor = document.createElement('a');
-    anchor.href = objectUrl;
-    anchor.download = safeDownloadName(row.nombre_archivo || row.clave_documento + '.pdf');
-    document.body.append(anchor);
-    anchor.click();
-    anchor.remove();
-    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
-    showMessage('Descarga iniciada correctamente.');
+    await downloadEphemeralPdf({
+      db,
+      userId: currentUser,
+      documentRow: row,
+      isCurrent: () => state.user?.id === currentUser &&
+                       state.entity === currentEntity && state.supabase === db,
+      onStatus: (message) => {
+        if (state.user?.id === currentUser && state.entity === currentEntity) {
+          showMessage(message);
+        }
+      },
+    });
   } catch (error) {
-    showMessage(`No se pudo descargar el PDF: ${displayError(error)}`, true);
+    if (state.user?.id === currentUser && state.entity === currentEntity) {
+      showMessage(`No se pudo descargar el PDF: ${displayError(error)}`, true);
+    }
   } finally {
     button.disabled = false;
     button.textContent = originalLabel;

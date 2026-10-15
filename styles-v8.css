@@ -266,3 +266,15 @@
   .search-heading-tools small { text-align:center; }
   #dashboard-view > .entity-dashboard { margin-bottom:22px!important; }
 }
+
+
+/* EPES V8.4 · La bandeja de incidencias solo contiene asuntos pendientes. */
+.data-table tbody tr.record-pending-incident > td {
+  background:#fff8eb;
+}
+.data-table tbody tr.record-pending-incident > td:first-child {
+  border-left:4px solid #c58520;
+}
+.data-table tbody tr.record-pending-incident:hover > td {
+  background:#fff0d7;
+}

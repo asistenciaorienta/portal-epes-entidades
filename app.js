@@ -2,7 +2,7 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './config.js';
 import { downloadEphemeralPdf } from './download-on-demand.js';
 
-// V8.3: acceso a herramienta independiente, desglose prudente de incidencias; descargas V7 intactas.
+// V8.4: tarjeta y listado exclusivo de incidencias pendientes (resuelta=false); histórico en expediente; descargas V7 intactas.
 // V7: descarga bajo demanda para todos los documentos firmados visibles.
 // Autorización efectiva: Supabase Auth + RPC + RLS; no existe acceso anónimo.
 // El portal NO recurre automáticamente al bucket permanente si falla el circuito.
@@ -27,7 +27,7 @@ const SECTIONS = {
     columns: ['id_practica', 'id_convenio', 'fecha_inicio', 'fecha_fin', 'estado', 'anulada']
   },
   incidencias: {
-    title: 'Incidencias', description: 'Incidencias registradas. Consulta sin posibilidad de modificación.', key: 'id_incidencia',
+    title: 'Incidencias pendientes', description: 'Incidencias pendientes de resolver. Las incidencias resueltas se consultan en el convenio o la práctica correspondiente.', key: 'id_incidencia',
     columns: ['id_incidencia', 'id_origen', 'id_convenio', 'id_practica', 'tipo_origen', 'descripcion']
   }
 };
@@ -204,44 +204,31 @@ function markActiveTab() {
   }
 }
 
-// El contador de incidencias es HISTÓRICO: incluye pendientes y resueltas.
-// Cuando el volumen de la entidad es manejable, calculamos el desglose con
-// las mismas reglas prudentes de estado que utiliza el detalle del expediente.
-async function contarEstadosIncidencias(entityId, total) {
-  const PAGE = 500;
-  const MAX_ROWS = 2500;
-  if (total > MAX_ROWS) return null;
-  let pendientes = 0, resueltas = 0, indeterminadas = 0, leidas = 0;
-  for (let from = 0; from < total; from += PAGE) {
-    const to = Math.min(from + PAGE, total) - 1;
-    const { data, error } = await state.supabase.from('incidencias')
-      .select('*').eq('id_entidad', entityId)
-      .order('id_incidencia', { ascending: true })
-      .range(from, to);
-    if (error) throw error;
-    for (const inc of data || []) {
-      const status = incidenciaActiva(inc);
-      if (status === true) pendientes++;
-      else if (status === false) resueltas++;
-      else indeterminadas++;
-    }
-    leidas += data?.length || 0;
-    if ((data?.length || 0) < to - from + 1) break;
-  }
-  // Si la tabla cambió durante la consulta, no mostrar un desglose inexacto.
-  return leidas === total ? { pendientes, resueltas, indeterminadas } : null;
-}
-
+// El panel principal sirve como bandeja de trabajo: SOLO pendientes.
+// El origen EPES dispone del booleano real `resuelta`: false=pendiente, true=resuelta.
+// La lectura completa del histórico se conserva en fetchIncidencias() dentro
+// del detalle de cada convenio o práctica, sin filtrar por este booleano.
 async function loadCounts() {
   const entityId = state.entity;
   const metrics = ['convenios', 'incidencias'];
   for (const section of metrics) el(`count-${section}`).textContent = '…';
-  const results = await Promise.allSettled(metrics.map(async (name) => {
-    const { count, error } = await state.supabase.from(name)
-      .select('*', { count: 'exact', head: true }).eq('id_entidad', entityId);
-    if (error || count === null) throw error || new Error('No se pudo obtener el recuento.');
-    return count;
-  }));
+  const results = await Promise.allSettled([
+    (async () => {
+      const { count, error } = await state.supabase.from('convenios')
+        .select('id_convenio', { count: 'exact', head: true })
+        .eq('id_entidad', entityId);
+      if (error || count === null) throw error || new Error('No se pudo contar convenios.');
+      return count;
+    })(),
+    (async () => {
+      const { count, error } = await state.supabase.from('incidencias')
+        .select('id_incidencia', { count: 'exact', head: true })
+        .eq('id_entidad', entityId)
+        .eq('resuelta', false);
+      if (error || count === null) throw error || new Error('No se pudieron contar incidencias pendientes.');
+      return count;
+    })()
+  ]);
   if (state.entity !== entityId || !state.user) return;
   let failed = false;
   for (let i = 0; i < metrics.length; i++) {
@@ -249,37 +236,18 @@ async function loadCounts() {
     if (result.status === 'fulfilled') el(`count-${metrics[i]}`).textContent = result.value.toLocaleString('es-ES');
     else { failed = true; el(`count-${metrics[i]}`).textContent = '—'; }
   }
-  const resultIncidencias = results[metrics.indexOf('incidencias')];
   const tarjeta = el('count-incidencias').closest('.stat');
   const pie = el('incidencias-caption');
+  const resultado = results[1];
   tarjeta.classList.remove('has-incidents');
-  if (resultIncidencias.status === 'fulfilled') {
-    const total = resultIncidencias.value;
-    if (!total) {
-      pie.textContent = 'Sin incidencias registradas';
-    } else {
-      pie.textContent = `${total.toLocaleString('es-ES')} registradas en total (pendientes y gestionadas)`;
-      try {
-        const estados = await contarEstadosIncidencias(entityId, total);
-        if (entityId !== state.entity || !state.user) return;
-        if (estados) {
-          const { pendientes, resueltas, indeterminadas } = estados;
-          const partes = [
-            `${pendientes.toLocaleString('es-ES')} pendiente${pendientes === 1 ? '' : 's'}`,
-            `${resueltas.toLocaleString('es-ES')} resuelta${resueltas === 1 ? '' : 's'}`
-          ];
-          if (indeterminadas) partes.push(`${indeterminadas.toLocaleString('es-ES')} sin estado confirmado`);
-          pie.textContent = partes.join(' · ');
-          // La alerta visual refleja pendientes confirmadas, no el histórico.
-          tarjeta.classList.toggle('has-incidents', pendientes > 0);
-        }
-      } catch (error) {
-        // El total histórico sigue siendo fiable aunque el desglose falle.
-        console.warn('EPES: no se pudo calcular el desglose de incidencias:', displayError(error));
-      }
-    }
+  if (resultado.status === 'fulfilled') {
+    const pendientes = resultado.value;
+    pie.textContent = pendientes === 0
+      ? 'Ninguna pendiente de resolver'
+      : `${pendientes.toLocaleString('es-ES')} pendiente${pendientes === 1 ? '' : 's'} por resolver`;
+    tarjeta.classList.toggle('has-incidents', pendientes > 0);
   } else {
-    pie.textContent = 'No se pudo consultar el estado de las incidencias';
+    pie.textContent = 'No se pudo consultar el número de pendientes';
   }
   if (failed) showMessage('No se han podido cargar todos los contadores. Comprueba tu conexión o tus permisos.', true);
 }
@@ -774,6 +742,7 @@ function renderTable(rows, section) {
     const issues = incidenciasEnPagina(section, row);
     const flags = section === 'convenios' ? alertasConvenio(row) : alertasRegistro(row, section, issues);
     setRowSeverity(tr, flags);
+    if (section === 'incidencias' && row.resuelta === false) tr.classList.add('record-pending-incident');
     tr.classList.add('record-clickable');
     for (const key of columns) {
       const td = document.createElement('td'); td.className = 'cell-short';
@@ -797,6 +766,10 @@ function renderTable(rows, section) {
       });
     } else {
       group.append(makeButton('Ver detalle', 'link-action', () => showDetails(row, section)));
+      if (section === 'incidencias' && row.id_convenio) {
+        group.append(makeButton('Abrir expediente', 'link-action', () =>
+          jumpToConvenio(row.id_convenio, Boolean(row.id_practica), row.id_practica || null)));
+      }
       tr.addEventListener('click', (event) => {
         if (!event.target.closest('button,a')) showDetails(row, section);
       });
@@ -926,6 +899,9 @@ async function loadSection() {
       .select('*', { count: 'exact' })
       .eq('id_entidad', entityId);
     if (section === 'convenios' && state.convenioFilter) query = query.eq('id_convenio', state.convenioFilter);
+    // Bandeja principal: NO listar incidencias ya resueltas.
+    // No aplicar este filtro al historial dentro de convenios/prácticas.
+    if (section === 'incidencias') query = query.eq('resuelta', false);
     const { data, error, count } = await query
       .order(spec.key, { ascending: false })
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
@@ -941,7 +917,18 @@ async function loadSection() {
     state.count = count ?? rows.length;
     el('records-count').textContent = `${state.count.toLocaleString('es-ES')} registro${state.count === 1 ? '' : 's'}`;
     if (!extra.issues.length) el('records-status').textContent = '';
-    el('records-content').append(rows.length === 0 ? emptyPanel() : renderTable(rows, section));
+    if (!rows.length && section === 'incidencias') {
+      const vacío = document.createElement('div');
+      vacío.className = 'empty-state';
+      const titulo = document.createElement('strong');
+      titulo.textContent = 'No hay incidencias pendientes de resolver';
+      const detalle = document.createElement('span');
+      detalle.textContent = 'Las incidencias ya resueltas siguen disponibles dentro de sus convenios y prácticas.';
+      vacío.append(titulo, detalle);
+      el('records-content').append(vacío);
+    } else {
+      el('records-content').append(rows.length === 0 ? emptyPanel() : renderTable(rows, section));
+    }
     el('pagination').hidden = state.count <= PAGE_SIZE;
     const start = rows.length ? page * PAGE_SIZE + 1 : 0;
     el('pagination-status').textContent = `${start}–${page * PAGE_SIZE + rows.length} de ${state.count}`;

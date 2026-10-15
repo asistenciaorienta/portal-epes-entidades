@@ -278,3 +278,57 @@
 .data-table tbody tr.record-pending-incident:hover > td {
   background:#fff0d7;
 }
+
+
+/* EPES V8.5 · Incidencias pendientes: seis columnas útiles, sin tabla horizontal. */
+.incidencias-table-wrap { overflow:visible!important; max-width:100%; }
+.incidencias-pendientes-table {
+  width:100%!important; min-width:0!important; max-width:100%; table-layout:fixed;
+  border-collapse:collapse;
+}
+.incidencias-pendientes-table th { font-size:11px; white-space:normal; line-height:1.4; }
+.incidencias-pendientes-table td { font-size:12px; line-height:1.55; vertical-align:top; }
+.incidencias-pendientes-table th,.incidencias-pendientes-table td {
+  padding:13px 10px; overflow-wrap:anywhere; white-space:normal!important;
+}
+.incidencias-pendientes-table th:nth-child(1) { width:9%; }
+.incidencias-pendientes-table th:nth-child(2) { width:20%; }
+.incidencias-pendientes-table th:nth-child(3) { width:11%; }
+.incidencias-pendientes-table th:nth-child(4) { width:10%; }
+.incidencias-pendientes-table th:nth-child(5) { width:34%; }
+.incidencias-pendientes-table th:nth-child(6) { width:16%; }
+.incidencias-pendientes-table .incident-reference .link-action { font-weight:800; }
+.incidencias-pendientes-table .incident-description {
+  white-space:pre-line!important; overflow:visible!important;
+  text-overflow:clip!important; line-height:1.6; color:#334f62;
+}
+.incidencias-pendientes-table .incident-company { font-weight:650; color:#284c67; }
+.incidencias-pendientes-table .incident-expediente .convenio-expand-button {
+  white-space:normal; text-align:center; width:100%; min-width:0;
+}
+.incidencias-pendientes-table .incident-unlinked {
+  display:block; font-size:11px; color:#667a89; line-height:1.4;
+}
+@media(max-width:960px) {
+  .incidencias-pendientes-table thead { display:none; }
+  .incidencias-pendientes-table,.incidencias-pendientes-table tbody { display:block; width:100%; }
+  .incidencias-pendientes-table tbody > tr {
+    display:block; width:100%; margin:0 0 12px;
+    border:1px solid #e2d8be; border-radius:11px; overflow:hidden;
+  }
+  .incidencias-pendientes-table tbody > tr > td {
+    display:grid; grid-template-columns:minmax(98px,27%) minmax(0,1fr);
+    gap:10px; width:100%; padding:10px 13px!important; border-bottom:1px solid #f0e6d4;
+    overflow-wrap:anywhere;
+  }
+  .incidencias-pendientes-table tbody > tr > td::before {
+    content:attr(data-label); font-weight:800; color:#587184;
+    font-size:10px; text-transform:uppercase;
+  }
+  .incidencias-pendientes-table tbody > tr > td:last-child { border-bottom:0; }
+  .incidencias-pendientes-table .incident-expediente .convenio-expand-button { width:auto; }
+  .incidencias-pendientes-table .incident-description { white-space:pre-line!important; }
+}
+@media(max-width:480px) {
+  .incidencias-pendientes-table tbody > tr > td { grid-template-columns:minmax(83px,33%) minmax(0,1fr); gap:7px; }
+}

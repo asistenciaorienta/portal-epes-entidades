@@ -2,7 +2,7 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './config.js';
 import { downloadEphemeralPdf } from './download-on-demand.js';
 
-// V8.4: tarjeta y listado exclusivo de incidencias pendientes (resuelta=false); histórico en expediente; descargas V7 intactas.
+// V8.5: bandeja de incidencias pendientes con 6 columnas y empresa resuelta por convenio; histórico y descargas V7 intactos.
 // V7: descarga bajo demanda para todos los documentos firmados visibles.
 // Autorización efectiva: Supabase Auth + RPC + RLS; no existe acceso anónimo.
 // El portal NO recurre automáticamente al bucket permanente si falla el circuito.
@@ -28,7 +28,7 @@ const SECTIONS = {
   },
   incidencias: {
     title: 'Incidencias pendientes', description: 'Incidencias pendientes de resolver. Las incidencias resueltas se consultan en el convenio o la práctica correspondiente.', key: 'id_incidencia',
-    columns: ['id_incidencia', 'id_origen', 'id_convenio', 'id_practica', 'tipo_origen', 'descripcion']
+    columns: ['id_incidencia', 'nombre_empresa', 'id_convenio', 'id_practica', 'descripcion']
   }
 };
 const LABELS = {
@@ -390,7 +390,14 @@ async function showDetails(row, section) {
   h.textContent = 'Avisos y firmas';
   statusArea.append(h);
   const localInc = incidenciasEnPagina(section, row);
-  appendAlerts(statusArea, row, section, localInc);
+  if (section === 'incidencias') {
+    statusArea.append(createStatusBadge(
+      row.resuelta === false ? 'Pendiente de resolver' : 'Incidencia resuelta',
+      row.resuelta === false ? 'pending' : 'ok'
+    ));
+  } else {
+    appendAlerts(statusArea, row, section, localInc);
+  }
   list.append(statusArea);
   for (const [key, value] of Object.entries(row)) {
     if (key === 'storage_bucket' || key === 'storage_path') continue;
@@ -719,7 +726,72 @@ function toggleExpedienteConvenio(row, tr, button) {
   void mostrarPracticasConFoco(row, practicesArea, focusPracticeId).catch((e) => practicesArea.replaceChildren(errorPanel(displayError(e))));
 }
 
+// Bandeja de incidencias: seis columnas fijas y sin datos técnicos sobrantes.
+// La empresa se consulta del convenio autorizado, nunca se presupone.
+function renderIncidenciasPendientes(rows) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'data-wrap incidencias-table-wrap';
+  const table = document.createElement('table');
+  table.className = 'data-table incidencias-pendientes-table';
+  const headings = ['Incidencia', 'Empresa', 'Convenio', 'Práctica', 'Detalle error', 'Expediente'];
+  const thead = document.createElement('thead');
+  const header = document.createElement('tr');
+  for (const label of headings) {
+    const th = document.createElement('th');
+    th.scope = 'col';
+    th.textContent = label;
+    header.append(th);
+  }
+  thead.append(header);
+  table.append(thead);
+  const tbody = document.createElement('tbody');
+  for (const row of rows) {
+    const ctx = state.pageRelations?.incidenceContext.get(String(row.id_incidencia)) || {};
+    const tr = document.createElement('tr');
+    tr.className = 'record-pending-incident record-clickable';
+    const addCell = (label, value, extraClass = '') => {
+      const td = document.createElement('td');
+      td.dataset.label = label;
+      if (extraClass) td.className = extraClass;
+      td.textContent = value == null || value === '' ? '—' : String(value);
+      tr.append(td);
+      return td;
+    };
+    const incidentCell = addCell('Incidencia', null, 'incident-reference');
+    incidentCell.replaceChildren(makeButton(
+      formatted(row.id_incidencia), 'link-action', () => showDetails(row, 'incidencias')
+    ));
+    addCell('Empresa', ctx.empresa || '—', 'incident-company');
+    addCell('Convenio', ctx.convenioId || '—', 'incident-convenio');
+    addCell('Práctica', ctx.practicaId || '—', 'incident-practica');
+    const detail = [row.descripcion, row.detalle, row.mensaje, row.error]
+      .find(v => typeof v === 'string' && v.trim()) || 'Sin descripción publicada';
+    addCell('Detalle error', detail, 'incident-description');
+    const action = document.createElement('td');
+    action.dataset.label = 'Expediente';
+    action.className = 'incident-expediente';
+    if (ctx.canOpen && ctx.convenioId) {
+      action.append(makeButton('Abrir expediente', 'convenio-expand-button', () =>
+        jumpToConvenio(ctx.convenioId, Boolean(ctx.practicaId), ctx.practicaId || null)));
+    } else {
+      const msg = document.createElement('span');
+      msg.className = 'incident-unlinked';
+      msg.textContent = ctx.inconsistent ? 'Revisar vinculación' : 'Sin expediente vinculado';
+      action.append(msg);
+    }
+    tr.append(action);
+    tr.addEventListener('click', (event) => {
+      if (!event.target.closest('button,a')) showDetails(row, 'incidencias');
+    });
+    tbody.append(tr);
+  }
+  table.append(tbody);
+  wrapper.append(table);
+  return wrapper;
+}
+
 function renderTable(rows, section) {
+  if (section === 'incidencias') return renderIncidenciasPendientes(rows);
   const columns = columnsFor(rows, section);
   const wrapper = document.createElement('div');
   wrapper.className = section === 'convenios' ? 'data-wrap convenios-table-wrap' : 'data-wrap';
@@ -823,9 +895,63 @@ async function downloadDocument(row, button) {
     button.textContent = originalLabel;
   }
 }
+// Resuelve el nombre de empresa sin añadir campos inexistentes a incidencias.
+// Si solo consta una práctica, localiza primero su convenio.
+async function addIncidenceContexts(rows, entityId, relations, issues) {
+  const directConventionIds = new Set();
+  const practiceIds = new Set();
+  const refs = new Map();
+  for (const inc of rows) {
+    const originType = String(inc.tipo_origen || '').toLowerCase();
+    const practiceId = inc.id_practica ||
+      (originType.includes('pract') ? inc.id_origen : null);
+    const convenioId = inc.id_convenio ||
+      (originType.includes('conven') ? inc.id_origen : null);
+    refs.set(String(inc.id_incidencia), { practiceId, convenioId });
+    if (practiceId) practiceIds.add(practiceId);
+    if (convenioId) directConventionIds.add(convenioId);
+  }
+  const practicasById = new Map();
+  if (practiceIds.size) {
+    const { data, error } = await state.supabase.from('practicas')
+      .select('id_practica,id_convenio')
+      .eq('id_entidad', entityId)
+      .in('id_practica', [...practiceIds]);
+    if (error) issues.push(`Relación de prácticas: ${displayError(error)}`);
+    else for (const p of data || []) {
+      practicasById.set(String(p.id_practica), p);
+      if (p.id_convenio) directConventionIds.add(p.id_convenio);
+    }
+  }
+  const conveniosById = new Map();
+  if (directConventionIds.size) {
+    const { data, error } = await state.supabase.from('convenios')
+      .select('id_convenio,nombre_empresa')
+      .eq('id_entidad', entityId)
+      .in('id_convenio', [...directConventionIds]);
+    if (error) issues.push(`Relación de empresas: ${displayError(error)}`);
+    else for (const convenio of data || []) {
+      conveniosById.set(String(convenio.id_convenio), convenio);
+    }
+  }
+  for (const inc of rows) {
+    const ref = refs.get(String(inc.id_incidencia));
+    const practice = ref.practiceId ? practicasById.get(String(ref.practiceId)) : null;
+    const linkedId = practice?.id_convenio || null;
+    const inconsistent = Boolean(ref.convenioId && linkedId && String(ref.convenioId) !== String(linkedId));
+    const convenioId = ref.convenioId || linkedId;
+    const convenio = !inconsistent && convenioId ? conveniosById.get(String(convenioId)) : null;
+    relations.incidenceContext.set(String(inc.id_incidencia), {
+      convenioId, practicaId: ref.practiceId,
+      empresa: convenio?.nombre_empresa || null,
+      canOpen: Boolean(convenio), inconsistent
+    });
+  }
+}
+
 // La descarga privada se presenta junto al convenio o adenda correspondiente.
 async function loadPageRelations(section, rows, entityId) {
-  const relations = {docsByConvenio: new Map(), docsByAdenda: new Map(), adendasByConvenio: new Map(), incByConvenio: new Map(), incByPractica: new Map(), activePracticesByConvenio: new Map()};
+  const relations = {docsByConvenio: new Map(), docsByAdenda: new Map(), adendasByConvenio: new Map(), incByConvenio: new Map(), incByPractica: new Map(), activePracticesByConvenio: new Map(), incidenceContext: new Map()};
   const issues = [];
   const ids = [...new Set(rows.map((r) => r.id_convenio).filter(Boolean))];
   const adendaIds = [...new Set(rows.map((r) => r.id_adenda).filter((x) => x != null))];
@@ -875,6 +1001,9 @@ async function loadPageRelations(section, rows, entityId) {
       (r) => add(relations.incByPractica, r.id_practica, r));
   }
   await Promise.all(jobs);
+  if (section === 'incidencias' && rows.length) {
+    await addIncidenceContexts(rows, entityId, relations, issues);
+  }
   return {relations, issues};
 }
 

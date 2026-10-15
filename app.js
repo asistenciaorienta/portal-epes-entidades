@@ -84,6 +84,8 @@ function showLogin(message = '') {
   if (el('detail-dialog').open) el('detail-dialog').close();
   el('dashboard-view').hidden = true;
   el('login-view').hidden = false;
+  el('top-header-actions').hidden = true;
+  el('header-label').hidden = false;
   el('login-error').hidden = !message;
   el('login-error').textContent = message;
   if (!message) el('password').value = '';
@@ -91,6 +93,8 @@ function showLogin(message = '') {
 function showDashboard() {
   el('login-view').hidden = true;
   el('dashboard-view').hidden = false;
+  el('top-header-actions').hidden = false;
+  el('header-label').hidden = true;
   el('password').value = '';
 }
 function niceLabel(key) {
@@ -164,7 +168,6 @@ async function applyUser(user) {
   state.page = 0;
   state.convenioFilter = null;
   clearSearch();
-  el('welcome-line').textContent = `${profile.nombre || profile.email || user.email || 'Usuario autorizado'} · Consulta de información EPES Granada`;
   const selector = el('entity-select');
   selector.replaceChildren();
   for (const entity of entities) {

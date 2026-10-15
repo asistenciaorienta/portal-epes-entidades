@@ -6,9 +6,9 @@
   <meta name="color-scheme" content="light" />
   <meta name="referrer" content="no-referrer" />
   <title>Portal EPES Entidades · Granada</title>
-  <link rel="stylesheet" href="./styles.css?v=epes-v8-1-20261015" />
-  <link rel="stylesheet" href="./styles-v8.css?v=epes-v8-1-20261015" />
-  <script type="module" src="./app.js?v=epes-v8-1-20261015"></script>
+  <link rel="stylesheet" href="./styles.css?v=epes-v8-2-20261015" />
+  <link rel="stylesheet" href="./styles-v8.css?v=epes-v8-2-20261015" />
+  <script type="module" src="./app.js?v=epes-v8-2-20261015"></script>
 </head>
 <body>
   <div class="page-glow" aria-hidden="true"></div>
@@ -18,7 +18,11 @@
         <span class="identity-mark" aria-hidden="true"><img id="epes-logo" class="identity-logo" src="./assets/logo_epes.png" alt="" /><span class="identity-fallback">EPES</span></span>
         <span><strong>Portal EPES Entidades · Granada</strong><small>Servicio Andaluz de Empleo</small></span>
       </a>
-      <span class="header-label"><span class="header-dot"></span> Área de entidades colaboradoras</span>
+      <span id="header-label" class="header-label"><span class="header-dot"></span> Área de entidades colaboradoras</span>
+      <nav id="top-header-actions" class="header-actions top-header-actions" aria-label="Acciones de la sesión" hidden>
+        <button id="refresh-button" class="btn btn-secondary" type="button" title="Actualizar la información">Actualizar</button>
+        <button id="logout-button" class="btn btn-quiet" type="button" title="Cerrar sesión">Cerrar sesión</button>
+      </nav>
     </div>
   </header>
 
@@ -51,10 +55,6 @@
     </section>
 
     <section id="dashboard-view" hidden>
-      <div class="dashboard-heading">
-        <div><p class="eyebrow">GESTIÓN EPES · ENTIDADES COLABORADORAS</p><h1>Panel de la entidad</h1><p class="muted" id="welcome-line">Información actualizada desde EPES Granada.</p></div>
-        <div class="header-actions"><button id="refresh-button" class="btn btn-secondary" type="button">Actualizar</button><button id="logout-button" class="btn btn-quiet" type="button">Cerrar sesión</button></div>
-      </div>
       <div class="entity-strip entity-dashboard">
         <div class="entity-identity">
           <span class="field-label">ENTIDAD AUTORIZADA</span>

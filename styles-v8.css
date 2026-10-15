@@ -191,3 +191,50 @@
   .entity-dashboard .stat small { font-size:10px; }
   .adenda-footer .expediente-file { flex:1 1 100%; }
 }
+
+
+/* EPES V8.2 · Acciones de sesión integradas en la cabecera superior.
+   La franja redundante «Panel de la entidad» ha sido eliminada. */
+.site-header .top-header-actions {
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:10px;
+  width:auto;
+  flex:0 0 auto;
+  min-width:0;
+  margin-left:auto;
+}
+.site-header .top-header-actions .btn {
+  min-height:38px;
+  padding:8px 15px;
+  flex:0 0 auto;
+}
+/* La tarjeta de entidad es ahora el primer elemento del panel. */
+#dashboard-view > .entity-dashboard {
+  margin-top:clamp(18px, 2.6vw, 30px);
+}
+@media (max-width:650px) {
+  .site-header .site-header-inner {
+    flex-wrap:wrap;
+    row-gap:8px;
+  }
+  .site-header .identity { flex:1 1 auto; }
+  .site-header .top-header-actions {
+    flex:1 1 100%;
+    width:100%;
+    justify-content:flex-end;
+    gap:8px;
+    margin-left:0;
+    padding-top:8px;
+    border-top:1px solid #e8eef4;
+  }
+  .site-header .top-header-actions .btn {
+    flex:1 1 0;
+    min-width:0;
+    min-height:36px;
+    padding:7px 10px;
+    font-size:12px;
+  }
+  #dashboard-view > .entity-dashboard { margin-top:16px; }
+}

@@ -6,8 +6,9 @@
   <meta name="color-scheme" content="light" />
   <meta name="referrer" content="no-referrer" />
   <title>Portal EPES Entidades · Granada</title>
-  <link rel="stylesheet" href="./styles.css?v=epes-v7-20261015" />
-  <script type="module" src="./app.js?v=epes-v7-20261015"></script>
+  <link rel="stylesheet" href="./styles.css?v=epes-v8-20261015" />
+  <link rel="stylesheet" href="./styles-v8.css?v=epes-v8-20261015" />
+  <script type="module" src="./app.js?v=epes-v8-20261015"></script>
 </head>
 <body>
   <div class="page-glow" aria-hidden="true"></div>
@@ -30,7 +31,7 @@
       <div class="login-intro">
         <p class="eyebrow"><span class="eyebrow-line"></span> ENTIDADES COLABORADORAS</p>
         <h1>Consulta de información <em>EPES</em></h1>
-        <p>Accede a los convenios, adendas, prácticas e incidencias de tu entidad en un entorno seguro.</p>
+        <p>Consulta tus convenios y sus expedientes, con las adendas, prácticas e incidencias vinculadas.</p>
         <div class="intro-note"><span class="intro-note-icon" aria-hidden="true">✓</span> Solo verás información de las entidades que tengas autorizadas.</div>
       </div>
       <div class="login-card">
@@ -60,18 +61,16 @@
       </div>
       <p id="global-message" class="notice" hidden role="status"></p>
       <section class="stats" aria-label="Resumen y filtros por apartado">
-        <button class="stat stat-filter is-selected" type="button" data-stat-section="convenios" aria-pressed="true"><span>Convenios <span class="stat-arrow" aria-hidden="true">↗</span></span><strong id="count-convenios">—</strong><small>Ver convenios de la entidad</small></button>
-        <button class="stat stat-filter" type="button" data-stat-section="adendas" aria-pressed="false"><span>Adendas <span class="stat-arrow" aria-hidden="true">↗</span></span><strong id="count-adendas">—</strong><small>Ver adendas autorizadas</small></button>
-        <button class="stat stat-filter" type="button" data-stat-section="practicas" aria-pressed="false"><span>Prácticas <span class="stat-arrow" aria-hidden="true">↗</span></span><strong id="count-practicas">—</strong><small>Ver prácticas de la entidad</small></button>
+        <button class="stat stat-filter is-selected" type="button" data-stat-section="convenios" aria-pressed="true"><span>Convenios <span class="stat-arrow" aria-hidden="true">↗</span></span><strong id="count-convenios">—</strong><small>Ver expedientes, adendas y prácticas</small></button>
         <button class="stat stat-filter stat-incidencias" type="button" data-stat-section="incidencias" aria-pressed="false"><span>Incidencias <span class="stat-arrow" aria-hidden="true">↗</span></span><strong id="count-incidencias">—</strong><small id="incidencias-caption">Consultar incidencias registradas</small></button>
       </section>
       <section class="search-panel" aria-labelledby="search-title">
-        <div class="search-heading"><div><p class="eyebrow">BÚSQUEDA GENERAL</p><h2 id="search-title">Buscar información de la entidad</h2><p class="muted">Localiza convenios, empresas o prácticas, siempre dentro de tus entidades autorizadas.</p></div><span class="search-hint">Búsqueda protegida</span></div>
+        <div class="search-heading"><div><p class="eyebrow">BÚSQUEDA GENERAL</p><h2 id="search-title">Buscar información de la entidad</h2><p class="muted">Busca por convenio, empresa, CIF, código de práctica o nombre de participante. Abriremos su expediente correspondiente.</p></div><span class="search-hint">Búsqueda protegida</span></div>
         <form id="global-search-form" class="search-form" role="search">
           <label class="sr-only" for="global-search-input">Texto que deseas buscar</label>
-          <input id="global-search-input" type="search" placeholder="N.º de convenio, empresa, CIF o práctica…" maxlength="80" autocomplete="off" />
+          <input id="global-search-input" type="search" placeholder="Convenio, empresa, CIF, práctica o participante…" maxlength="80" autocomplete="off" />
           <label class="sr-only" for="global-search-scope">Tipo de búsqueda</label>
-          <select id="global-search-scope" aria-label="Buscar en"><option value="todos">Todo</option><option value="convenios">Convenios</option><option value="empresas">Empresas</option><option value="practicas">Prácticas</option></select>
+          <select id="global-search-scope" aria-label="Buscar en"><option value="todos">Todo</option><option value="convenios">Convenios</option><option value="empresas">Empresas</option><option value="practicas">Prácticas / participantes</option></select>
           <button class="btn btn-primary" type="submit" id="global-search-button">Buscar</button>
           <button class="btn btn-secondary" type="button" id="global-search-clear">Limpiar</button>
         </form>
@@ -81,12 +80,10 @@
       <div class="workspace">
         <nav class="tabs" aria-label="Secciones del portal">
           <button type="button" class="tab is-active" data-tab="convenios" aria-current="page">Convenios</button>
-          <button type="button" class="tab" data-tab="adendas">Adendas</button>
-          <button type="button" class="tab" data-tab="practicas">Prácticas</button>
           <button type="button" class="tab" data-tab="incidencias">Incidencias</button>
         </nav>
         <section class="records-panel" aria-labelledby="section-title">
-          <div class="records-heading"><div><p class="eyebrow" id="section-kicker">CONSULTA</p><h2 id="section-title">Convenios</h2><p id="section-description" class="muted">Relación de convenios autorizados. Pulsa un registro para consultar sus incidencias y firmas.</p></div><div class="records-tools"><button id="clear-convenio-filter" type="button" class="btn btn-secondary" hidden>Mostrar todos los convenios</button><span id="records-count" class="records-tag">—</span></div></div>
+          <div class="records-heading"><div><p class="eyebrow" id="section-kicker">CONSULTA</p><h2 id="section-title">Convenios</h2><p id="section-description" class="muted">Abre un convenio para descargar sus PDF y consultar adendas, participantes y prácticas.</p></div><div class="records-tools"><button id="clear-convenio-filter" type="button" class="btn btn-secondary" hidden>Mostrar todos los convenios</button><span id="records-count" class="records-tag">—</span></div></div>
           <div id="records-status" class="inline-status" role="status" aria-live="polite"></div>
           <div id="records-content"></div>
           <div id="pagination" class="pagination" hidden><span id="pagination-status" class="muted"></span><div><button id="prev-page" class="btn btn-secondary" type="button">Anterior</button><button id="next-page" class="btn btn-secondary" type="button">Siguiente</button></div></div>

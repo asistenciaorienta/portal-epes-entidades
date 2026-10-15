@@ -2,6 +2,7 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './config.js';
 import { downloadEphemeralPdf } from './download-on-demand.js';
 
+// V8: gestión visual centrada en convenios; descarga cifrada V7 intacta.
 // V7: descarga bajo demanda para todos los documentos firmados visibles.
 // Autorización efectiva: Supabase Auth + RPC + RLS; no existe acceso anónimo.
 // El portal NO recurre automáticamente al bucket permanente si falla el circuito.
@@ -15,7 +16,7 @@ const SEARCH_RESULT_LIMIT = 30;
 const SECTIONS = {
   convenios: {
     title: 'Convenios', description: 'Convenios de la entidad publicados en EPES.', key: 'id_convenio',
-    columns: ['id_convenio', 'nombre_empresa', 'cif_empresa', 'firma_delegado', 'fecha_extincion']
+    columns: ['id_convenio', 'nombre_empresa', 'cif_empresa', 'firma_delegado', 'fecha_extincion', 'id_convocatoria']
   },
   adendas: {
     title: 'Adendas', description: 'Adendas vinculadas a los convenios de la entidad.', key: 'id_adenda',
@@ -40,7 +41,8 @@ const LABELS = {
   nombre_archivo: 'Archivo', fecha_publicacion: 'Publicado', fecha_actualizacion: 'Actualizado',
   clave_documento: 'Documento', id_entidad: 'Entidad', id_personal_entidad: 'Personal entidad',
   id_acreditacion: 'Acreditación', id_convocatoria: 'Convocatoria', id_practica_origen: 'Práctica origen',
-  descripcion: 'Descripción de la incidencia', estado: 'Estado', resuelta: 'Resuelta', fecha_resolucion: 'Fecha resolución'
+  descripcion: 'Descripción de la incidencia', estado: 'Estado', resuelta: 'Resuelta', fecha_resolucion: 'Fecha resolución',
+  persona_usuaria: 'Participante'
 };
 
 const el = (id) => document.getElementById(id);
@@ -200,7 +202,7 @@ function markActiveTab() {
 
 async function loadCounts() {
   const entityId = state.entity;
-  const metrics = ['convenios', 'adendas', 'practicas', 'incidencias'];
+  const metrics = ['convenios', 'incidencias'];
   for (const section of metrics) el(`count-${section}`).textContent = '…';
   const results = await Promise.allSettled(metrics.map(async (name) => {
     const { count, error } = await state.supabase.from(name)
@@ -217,7 +219,8 @@ async function loadCounts() {
   }
   const resultIncidencias = results[metrics.indexOf('incidencias')];
   const hayIncidencias = resultIncidencias.status === 'fulfilled' && resultIncidencias.value > 0;
-  el('count-incidencias').closest('.stat').classList.toggle('has-incidents', hayIncidencias);
+  // Un recuento histórico no implica incidencias activas: tarjeta neutra.
+  el('count-incidencias').closest('.stat').classList.remove('has-incidents');
   el('incidencias-caption').textContent = hayIncidencias
     ? `${resultIncidencias.value.toLocaleString('es-ES')} incidencia${resultIncidencias.value === 1 ? '' : 's'} registrada${resultIncidencias.value === 1 ? '' : 's'} · consultar`
     : 'Sin incidencias registradas';
@@ -227,19 +230,24 @@ async function loadCounts() {
 function columnsFor(rows, section) {
   if (!rows.length) return [];
   const keys = Object.keys(rows[0]).filter((x) => x !== 'id_entidad' && x !== 'fecha_actualizacion' && x !== 'storage_bucket' && x !== 'storage_path');
+  // No añadir columnas adicionales automáticamente al listado principal.
+  // Evita que aparezca Acreditación o surja un desplazamiento horizontal.
+  if (section === 'convenios') return SECTIONS.convenios.columns;
   const preferred = SECTIONS[section].columns.filter((x) => keys.includes(x));
-  return [...preferred, ...keys.filter((x) => !preferred.includes(x))].slice(0, 7);
+  return [...preferred, ...keys.filter((x) => !preferred.includes(x))].slice(0, 6);
 }
 // Solo señalamos firmas pendientes cuando el dato sincronizado indica expresamente «no firmado».
 // Las firmas nulas o desconocidas NO se consideran pendientes.
 const FIRMAS_CONOCIDAS = {
-  convenios: ['firma_delegado'],
-  adendas: ['firma_delegado'],
+  convenios: ['firma_delegado', 'firma_empresa', 'firma_entidad'],
+  adendas: ['firma_delegado', 'firma_representante', 'firma_representante_legal', 'firma_entidad', 'firma_empresa'],
   practicas: ['firma_delegado', 'firma_empresa', 'firma_participante', 'firma_alumno']
 };
 function firmaPendiente(row, section) {
+  const esFaltaConfirmada = (v) => v === false || v === 0 ||
+    (typeof v === 'string' && ['false', 'no', '0', 'pendiente', 'sin firmar'].includes(v.trim().toLowerCase()));
   return (FIRMAS_CONOCIDAS[section] || [])
-    .filter((field) => Object.hasOwn(row, field) && (row[field] === false || row[field] === 'false'));
+    .filter((field) => Object.hasOwn(row, field) && esFaltaConfirmada(row[field]));
 }
 function tieneErroresActivos(row) {
   const value = row.errores_activos;
@@ -273,6 +281,35 @@ function alertasRegistro(row, section, incidencias = []) {
     flags.push({ text: 'Incidencias registradas', kind: 'history' });
   }
   return flags;
+}
+// Aviso agregado para el listado de convenios. Incluye adendas y prácticas
+// del expediente; no convierte incidencias históricas en problemas activos.
+function alertasConvenio(row, relations = state.pageRelations) {
+  const flags = alertasRegistro(row, 'convenios', incidenciasEnPagina('convenios', row, relations));
+  if (!relations) return flags;
+  const id = String(row.id_convenio);
+  const adendas = relations.adendasByConvenio.get(id) || [];
+  if (adendas.some((a) => tieneErroresActivos(a))) {
+    flags.push({ text: 'Errores en adenda', kind: 'error' });
+  }
+  if (adendas.some((a) => firmaPendiente(a, 'adendas').length > 0)) {
+    flags.push({ text: 'Firma de adenda pendiente', kind: 'pending' });
+  }
+  if ((relations.activePracticesByConvenio.get(id) || 0) > 0) {
+    flags.push({ text: 'Prácticas con errores', kind: 'error' });
+  }
+  return flags;
+}
+function renderFlags(target, flags) {
+  const wrap = document.createElement('div');
+  wrap.className = 'record-badges';
+  for (const flag of flags) wrap.append(createStatusBadge(flag.text, flag.kind));
+  if (!flags.length) wrap.append(createStatusBadge('Sin avisos activos', 'ok'));
+  target.append(wrap);
+}
+function setRowSeverity(tr, flags) {
+  if (flags.some((f) => f.kind === 'error')) tr.classList.add('record-has-errors');
+  else if (flags.some((f) => f.kind === 'pending')) tr.classList.add('record-has-pending');
 }
 function createStatusBadge(label, kind) {
   const span = document.createElement('span');
@@ -386,7 +423,7 @@ function makeButton(label, className, handler) {
 }
 
 // Carga bajo demanda: ninguna práctica de otros convenios ni de otras entidades.
-async function renderPracticasConvenio(convenio, panel, page = 0) {
+async function renderPracticasConvenio(convenio, panel, page = 0, focusPracticeId = null) {
   const entityId = state.entity;
   const convenioId = convenio.id_convenio;
   panel.replaceChildren();
@@ -437,10 +474,10 @@ async function renderPracticasConvenio(convenio, panel, page = 0) {
       return;
     }
     const scroll = document.createElement('div');
-    scroll.className = 'data-wrap';
+    scroll.className = 'data-wrap practicas-inline-wrap';
     const table = document.createElement('table');
-    table.className = 'convenio-expanded-table';
-    const keys = ['id_practica', 'fecha_inicio', 'fecha_fin', 'estado'].filter((key) => Object.hasOwn(records[0], key));
+    table.className = 'convenio-expanded-table practica-inline-table';
+    const keys = ['id_practica', 'fecha_inicio', 'fecha_fin', 'persona_usuaria'];
     const trh = document.createElement('tr');
     for (const key of keys) {
       const th = document.createElement('th');
@@ -457,18 +494,20 @@ async function renderPracticasConvenio(convenio, panel, page = 0) {
     const tbody = document.createElement('tbody');
     for (const practice of records) {
       const tr = document.createElement('tr');
+      if (focusPracticeId != null && String(practice.id_practica) === String(focusPracticeId)) {
+        tr.classList.add('practica-found');
+      }
       for (const key of keys) {
         const td = document.createElement('td');
-        td.textContent = cellText(practice[key], 45);
+        td.dataset.label = niceLabel(key);
+        td.textContent = formatted(practice[key]);
         tr.append(td);
       }
       const issues = practiceIssues.get(String(practice.id_practica)) || [];
       const flags = alertasRegistro(practice, 'practicas', issues);
-      if (flags.some((f) => f.kind === 'error')) tr.classList.add('record-has-errors');
-      else if (flags.some((f) => f.kind === 'pending')) tr.classList.add('record-has-pending');
-      else if (flags.some((f) => f.kind === 'history')) tr.classList.add('record-has-history');
-      const tdStatus = document.createElement('td'); appendAlerts(tdStatus, practice, 'practicas', issues); tr.append(tdStatus);
-      const actions = document.createElement('td');
+      setRowSeverity(tr, flags);
+      const tdStatus = document.createElement('td'); tdStatus.dataset.label = 'Avisos'; appendAlerts(tdStatus, practice, 'practicas', issues); tr.append(tdStatus);
+      const actions = document.createElement('td'); actions.dataset.label = 'Detalle';
       actions.append(makeButton('Ver detalle / incidencias', 'link-action', () => showDetails(practice, 'practicas')));
       tr.classList.add('record-clickable');
       tr.addEventListener('click', (event) => { if (!event.target.closest('button,a')) showDetails(practice, 'practicas'); });
@@ -478,6 +517,8 @@ async function renderPracticasConvenio(convenio, panel, page = 0) {
     table.append(tbody);
     scroll.append(table);
     panel.append(scroll);
+    const match = tbody.querySelector('.practica-found');
+    if (match) match.scrollIntoView({ behavior: 'smooth', block: 'center' });
     if ((count ?? records.length) > PRACTICES_PAGE_SIZE) {
       const pager = document.createElement('div');
       pager.className = 'convenio-expanded-pagination';
@@ -485,9 +526,9 @@ async function renderPracticasConvenio(convenio, panel, page = 0) {
       status.textContent = `${page * PRACTICES_PAGE_SIZE + 1}–${page * PRACTICES_PAGE_SIZE + records.length} de ${count}`;
       const controls = document.createElement('div');
       controls.className = 'search-result-actions';
-      const prev = makeButton('Anterior', 'btn btn-secondary', () => renderPracticasConvenio(convenio, panel, page - 1));
+      const prev = makeButton('Anterior', 'btn btn-secondary', () => renderPracticasConvenio(convenio, panel, page - 1, focusPracticeId));
       prev.disabled = page === 0;
-      const next = makeButton('Siguiente', 'btn btn-secondary', () => renderPracticasConvenio(convenio, panel, page + 1));
+      const next = makeButton('Siguiente', 'btn btn-secondary', () => renderPracticasConvenio(convenio, panel, page + 1, focusPracticeId));
       next.disabled = (page + 1) * PRACTICES_PAGE_SIZE >= count;
       controls.append(prev, next);
       pager.append(status, controls);
@@ -538,12 +579,32 @@ function renderAdendasConvenio(convenio, panel, relations) {
   }
   panel.append(section);
 }
+async function mostrarPracticasConFoco(convenio, panel, focusPracticeId = null) {
+  let page = 0;
+  if (focusPracticeId) {
+    const { count, error } = await state.supabase.from('practicas')
+      .select('id_practica', { count: 'exact', head: true })
+      .eq('id_entidad', state.entity)
+      .eq('id_convenio', convenio.id_convenio)
+      .gt('id_practica', focusPracticeId);
+    if (error) throw error;
+    page = Math.floor((count || 0) / PRACTICES_PAGE_SIZE);
+  }
+  await renderPracticasConvenio(convenio, panel, page, focusPracticeId);
+}
 function toggleExpedienteConvenio(row, tr, button) {
+  const focusPracticeId = button.dataset.focusPracticeId || null;
+  delete button.dataset.focusPracticeId;
   const old = tr.nextElementSibling;
   if (old?.classList.contains('convenio-expanded-row')) {
-    old.hidden = !old.hidden;
+    if (old.hidden) old.hidden = false;
+    else if (!focusPracticeId) old.hidden = true;
     button.setAttribute('aria-expanded', String(!old.hidden));
-    button.textContent = old.hidden ? 'Ver expediente y prácticas' : 'Ocultar expediente';
+    button.textContent = old.hidden ? 'Abrir expediente' : 'Ocultar expediente';
+    if (focusPracticeId && !old.hidden) {
+      const area = old.querySelector('.practices-area');
+      if (area) void mostrarPracticasConFoco(row, area, focusPracticeId).catch((e) => area.replaceChildren(errorPanel(displayError(e))));
+    }
     return;
   }
   const expanded = document.createElement('tr'); expanded.className = 'convenio-expanded-row';
@@ -551,6 +612,14 @@ function toggleExpedienteConvenio(row, tr, button) {
   const panel = document.createElement('div'); panel.className = 'convenio-expanded-panel';
   td.append(panel); expanded.append(td); tr.after(expanded);
   button.setAttribute('aria-expanded', 'true'); button.textContent = 'Ocultar expediente';
+
+  const top = document.createElement('section'); top.className = 'expanded-doc-section';
+  const title = document.createElement('h4'); title.textContent = `Expediente ${row.id_convenio}`;
+  top.append(title);
+  renderFlags(top, alertasConvenio(row));
+  top.append(makeButton('Ver datos y avisos del convenio', 'link-action', () => showDetails(row, 'convenios')));
+  panel.append(top);
+
   const documents = document.createElement('section'); documents.className = 'expanded-doc-section';
   const docTitle = document.createElement('h4'); docTitle.textContent = 'Convenio firmado'; documents.append(docTitle);
   const relatedDocs = convenioDocs(row);
@@ -558,17 +627,19 @@ function toggleExpedienteConvenio(row, tr, button) {
   else { const empty = document.createElement('p'); empty.className='muted'; empty.textContent='No hay PDF firmado publicado para este convenio.'; documents.append(empty); }
   panel.append(documents);
   renderAdendasConvenio(row, panel, state.pageRelations);
+
   const practices = document.createElement('section'); practices.className='expanded-doc-section';
-  const practiceHeading = document.createElement('h4'); practiceHeading.textContent='Prácticas del convenio';
-  practices.append(practiceHeading);
-  const practicesArea = document.createElement('div'); practices.append(practicesArea); panel.append(practices);
-  void renderPracticasConvenio(row, practicesArea);
+  const practicesArea = document.createElement('div'); practicesArea.className = 'practices-area';
+  practices.append(practicesArea); panel.append(practices);
+  void mostrarPracticasConFoco(row, practicesArea, focusPracticeId).catch((e) => practicesArea.replaceChildren(errorPanel(displayError(e))));
 }
 
 function renderTable(rows, section) {
   const columns = columnsFor(rows, section);
-  const wrapper = document.createElement('div'); wrapper.className = 'data-wrap';
-  const table = document.createElement('table'); table.className = 'data-table';
+  const wrapper = document.createElement('div');
+  wrapper.className = section === 'convenios' ? 'data-wrap convenios-table-wrap' : 'data-wrap';
+  const table = document.createElement('table');
+  table.className = section === 'convenios' ? 'data-table convenios-table' : 'data-table';
   const thead = document.createElement('thead'); const headingRow = document.createElement('tr');
   for (const key of columns) {
     const th = document.createElement('th'); th.scope = 'col'; th.textContent = niceLabel(key);
@@ -577,39 +648,43 @@ function renderTable(rows, section) {
   if (section !== 'incidencias') {
     const th = document.createElement('th'); th.scope = 'col'; th.textContent = 'Avisos'; headingRow.append(th);
   }
-  const actionsHead = document.createElement('th'); actionsHead.scope = 'col'; actionsHead.textContent = 'Consulta';
-  headingRow.append(actionsHead); thead.append(headingRow); table.append(thead);
+  const actionsHead = document.createElement('th'); actionsHead.scope = 'col';
+  actionsHead.textContent = 'Expediente'; headingRow.append(actionsHead);
+  thead.append(headingRow); table.append(thead);
   const tbody = document.createElement('tbody');
   for (const row of rows) {
     const tr = document.createElement('tr');
     const issues = incidenciasEnPagina(section, row);
-    const flags = alertasRegistro(row, section, issues);
-    if (flags.some((f) => f.kind === 'error')) tr.classList.add('record-has-errors');
-    else if (flags.some((f) => f.kind === 'pending')) tr.classList.add('record-has-pending');
-    else if (flags.some((f) => f.kind === 'history')) tr.classList.add('record-has-history');
+    const flags = section === 'convenios' ? alertasConvenio(row) : alertasRegistro(row, section, issues);
+    setRowSeverity(tr, flags);
     tr.classList.add('record-clickable');
     for (const key of columns) {
       const td = document.createElement('td'); td.className = 'cell-short';
-      td.textContent = cellText(row[key]); td.title = formatted(row[key]); tr.append(td);
+      td.dataset.label = niceLabel(key);
+      td.textContent = section === 'convenios' ? formatted(row[key]) : cellText(row[key]);
+      td.title = formatted(row[key]); tr.append(td);
     }
     if (section !== 'incidencias') {
-      const cell = document.createElement('td'); appendAlerts(cell, row, section, issues); tr.append(cell);
+      const cell = document.createElement('td'); cell.dataset.label = 'Avisos';
+      renderFlags(cell, flags); tr.append(cell);
     }
-    const action = document.createElement('td');
+    const action = document.createElement('td'); action.dataset.label = 'Expediente';
     const group = document.createElement('div'); group.className = 'convenio-actions';
-    const button = makeButton('Ver detalle / avisos', 'link-action', () => showDetails(row, section));
-    group.append(button);
     if (section === 'convenios') {
-      documentButtons(group, convenioDocs(row), 'Convenio firmado');
-      const showPractices = makeButton('Ver expediente y prácticas', 'convenio-expand-button', () => toggleExpedienteConvenio(row, tr, showPractices));
+      const showPractices = makeButton('Abrir expediente', 'convenio-expand-button', () => toggleExpedienteConvenio(row, tr, showPractices));
       showPractices.dataset.practicasConvenio = row.id_convenio;
       showPractices.setAttribute('aria-expanded', 'false');
       group.append(showPractices);
-    } else if (section === 'adendas') {
-      documentButtons(group, adendaDocs(row), 'Adenda firmada');
+      tr.addEventListener('click', (event) => {
+        if (!event.target.closest('button,a')) showPractices.click();
+      });
+    } else {
+      group.append(makeButton('Ver detalle', 'link-action', () => showDetails(row, section)));
+      tr.addEventListener('click', (event) => {
+        if (!event.target.closest('button,a')) showDetails(row, section);
+      });
     }
     action.append(group); tr.append(action);
-    tr.addEventListener('click', (event) => { if (!event.target.closest('button,a')) showDetails(row, section); });
     tbody.append(tr);
   }
   table.append(tbody); wrapper.append(table); return wrapper;
@@ -660,7 +735,7 @@ async function downloadDocument(row, button) {
 }
 // La descarga privada se presenta junto al convenio o adenda correspondiente.
 async function loadPageRelations(section, rows, entityId) {
-  const relations = {docsByConvenio: new Map(), docsByAdenda: new Map(), adendasByConvenio: new Map(), incByConvenio: new Map(), incByPractica: new Map()};
+  const relations = {docsByConvenio: new Map(), docsByAdenda: new Map(), adendasByConvenio: new Map(), incByConvenio: new Map(), incByPractica: new Map(), activePracticesByConvenio: new Map()};
   const issues = [];
   const ids = [...new Set(rows.map((r) => r.id_convenio).filter(Boolean))];
   const adendaIds = [...new Set(rows.map((r) => r.id_adenda).filter((x) => x != null))];
@@ -693,6 +768,15 @@ async function loadPageRelations(section, rows, entityId) {
       (r) => add(relations.adendasByConvenio, r.id_convenio, r));
     queue('Incidencias de convenios', state.supabase.from('incidencias').select('*').eq('id_entidad', entityId).in('id_convenio', ids).limit(1000),
       (r) => add(relations.incByConvenio, r.id_convenio, r));
+    // Indicador de errores de prácticas dentro de cada convenio, sin cargar nombres.
+    queue('Errores de prácticas', state.supabase.from('practicas')
+      .select('id_convenio,id_practica,errores_activos')
+      .eq('id_entidad', entityId).in('id_convenio', ids)
+      .eq('errores_activos', true).limit(1000),
+      (r) => {
+        const key = String(r.id_convenio);
+        relations.activePracticesByConvenio.set(key, (relations.activePracticesByConvenio.get(key) || 0) + 1);
+      });
   }
   if (section === 'practicas' && practiceIds.length) {
     queue('Incidencias de prácticas', state.supabase.from('incidencias').select('*').eq('id_entidad', entityId).in('id_practica', practiceIds).limit(1000),
@@ -767,7 +851,7 @@ function setSearchStatus(message) {
   el('global-search-status').textContent = message;
 }
 
-async function jumpToConvenio(id, showPractices = false) {
+async function jumpToConvenio(id, showPractices = false, focusPracticeId = null) {
   state.section = 'convenios';
   state.page = 0;
   state.convenioFilter = id;
@@ -777,7 +861,10 @@ async function jumpToConvenio(id, showPractices = false) {
   if (showPractices) {
     const button = [...document.querySelectorAll('[data-practicas-convenio]')]
       .find((candidate) => candidate.dataset.practicasConvenio === id);
-    button?.click();
+    if (button) {
+      if (focusPracticeId) button.dataset.focusPracticeId = String(focusPracticeId);
+      button.click();
+    }
   }
 }
 
@@ -798,7 +885,7 @@ function appendSearchGroup(target, title, rows, section) {
       summary.textContent = `CIF: ${row.cif_empresa || '—'} · Convenio ${row.id_convenio || '—'}`;
     } else {
       text.textContent = `Práctica ${row.id_practica || '—'}`;
-      summary.textContent = `Convenio ${row.id_convenio || '—'} · Inicio ${formatted(row.fecha_inicio)} · Fin ${formatted(row.fecha_fin)}`;
+      summary.textContent = `Participante: ${row.persona_usuaria || '—'} · Convenio ${row.id_convenio || '—'} · Inicio ${formatted(row.fecha_inicio)} · Fin ${formatted(row.fecha_fin)}`;
     }
     main.append(text, summary);
     if (alertasRegistro(row, section).length) appendAlerts(main, row, section);
@@ -808,7 +895,7 @@ function appendSearchGroup(target, title, rows, section) {
     if (section === 'convenios') {
       actions.append(makeButton('Ver prácticas del convenio', 'btn btn-secondary', () => jumpToConvenio(row.id_convenio, true)));
     } else if (row.id_convenio) {
-      actions.append(makeButton('Ver convenio', 'btn btn-secondary', () => jumpToConvenio(row.id_convenio)));
+      actions.append(makeButton('Abrir convenio y práctica', 'btn btn-secondary', () => jumpToConvenio(row.id_convenio, true, row.id_practica)));
     }
     item.append(main, actions);
     target.append(item);
@@ -845,7 +932,7 @@ async function globalSearch(event) {
       }
     }
     if (scope === 'todos' || scope === 'practicas') {
-      for (const field of ['id_practica', 'id_convenio']) {
+      for (const field of ['id_practica', 'id_convenio', 'persona_usuaria']) {
         queries.push({ kind: 'practicas', field, work: state.supabase.from('practicas')
           .select('*').eq('id_entidad', entityId).ilike(field, pattern)
           .order('id_practica', { ascending: false }).limit(SEARCH_RESULT_LIMIT) });
@@ -872,7 +959,7 @@ async function globalSearch(event) {
       return;
     }
     appendSearchGroup(target, scope === 'empresas' ? 'Empresas / convenios asociados' : 'Convenios y empresas', convenios, 'convenios');
-    appendSearchGroup(target, 'Prácticas', practicas, 'practicas');
+    appendSearchGroup(target, 'Prácticas y participantes', practicas, 'practicas');
     const limited = answers.some((a) => (a.data || []).length === SEARCH_RESULT_LIMIT);
     setSearchStatus(`${total} coincidencia${total === 1 ? '' : 's'} mostrada${total === 1 ? '' : 's'}.${limited ? ' Resultados limitados: concreta la búsqueda para localizar otros registros.' : ''}`);
   } catch (error) {

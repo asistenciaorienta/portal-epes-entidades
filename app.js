@@ -2,7 +2,7 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './config.js';
 import { downloadEphemeralPdf } from './download-on-demand.js';
 
-// V8: gestión visual centrada en convenios; descarga cifrada V7 intacta.
+// V8.1: ficha visual del expediente; corrección de consulta prácticas; descargas V7 intactas.
 // V7: descarga bajo demanda para todos los documentos firmados visibles.
 // Autorización efectiva: Supabase Auth + RPC + RLS; no existe acceso anónimo.
 // El portal NO recurre automáticamente al bucket permanente si falla el circuito.
@@ -175,6 +175,7 @@ async function applyUser(user) {
   }
   selector.value = state.entity;
   selector.disabled = entities.length === 1;
+  el('entity-selector-group').hidden = entities.length === 1;
   updateEntityHeading();
   markActiveTab();
   showDashboard();
@@ -219,8 +220,9 @@ async function loadCounts() {
   }
   const resultIncidencias = results[metrics.indexOf('incidencias')];
   const hayIncidencias = resultIncidencias.status === 'fulfilled' && resultIncidencias.value > 0;
-  // Un recuento histórico no implica incidencias activas: tarjeta neutra.
-  el('count-incidencias').closest('.stat').classList.remove('has-incidents');
+  // Ámbar: existen incidencias registradas, aunque puedan estar resueltas.
+  // No confundimos el histórico con un error activo del expediente.
+  el('count-incidencias').closest('.stat').classList.toggle('has-incidents', hayIncidencias);
   el('incidencias-caption').textContent = hayIncidencias
     ? `${resultIncidencias.value.toLocaleString('es-ES')} incidencia${resultIncidencias.value === 1 ? '' : 's'} registrada${resultIncidencias.value === 1 ? '' : 's'} · consultar`
     : 'Sin incidencias registradas';
@@ -317,12 +319,13 @@ function createStatusBadge(label, kind) {
   span.textContent = label;
   return span;
 }
-function appendAlerts(target, row, section, incidencias = []) {
+function appendAlerts(target, row, section, incidencias = [], showEmpty = true) {
   const flags = alertasRegistro(row, section, incidencias);
+  if (!flags.length && !showEmpty) return flags;
   const wrap = document.createElement('div');
   wrap.className = 'record-badges';
   for (const flag of flags) wrap.append(createStatusBadge(flag.text, flag.kind));
-  if (!flags.length) wrap.append(createStatusBadge('Sin avisos confirmados', 'ok'));
+  if (!flags.length) wrap.append(createStatusBadge('Sin avisos activos', 'ok'));
   target.append(wrap);
   return flags;
 }
@@ -549,35 +552,72 @@ function adendaDocs(row, relations = state.pageRelations) {
 function documentButtons(target, documents, fallback = 'PDF firmado') {
   for (const doc of documents) {
     const label = doc.nombre_archivo || doc.clave_documento || fallback;
-    const button = makeButton(`↓ ${label}`, 'pdf-download', (event) => downloadDocument(doc, button));
+    const row = document.createElement('div');
+    row.className = 'expediente-file';
+    const file = document.createElement('div');
+    file.className = 'expediente-file-info';
+    const icon = document.createElement('span');
+    icon.className = 'expediente-file-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = 'PDF';
+    const name = document.createElement('span');
+    name.className = 'expediente-file-name';
+    name.textContent = label;
+    file.append(icon, name);
+    const button = makeButton('↓ Descargar PDF', 'pdf-download', () => downloadDocument(doc, button));
     button.title = `Descargar ${label}`;
-    target.append(button);
+    row.append(file, button);
+    target.append(row);
   }
 }
-function renderAdendasConvenio(convenio, panel, relations) {
-  const list = relations.adendasByConvenio.get(String(convenio.id_convenio)) || [];
-  const section = document.createElement('section'); section.className = 'expanded-doc-section';
-  const title = document.createElement('h4'); title.textContent = `Adendas del convenio (${list.length})`;
+function renderAdendasConvenio(convenio, relations) {
+  const list = relations?.adendasByConvenio.get(String(convenio.id_convenio)) || [];
+  const section = document.createElement('section');
+  section.className = 'expanded-doc-section expediente-card expediente-adendas';
+  const title = document.createElement('h4');
+  title.textContent = `Adendas (${list.length})`;
   section.append(title);
   if (!list.length) {
-    const empty = document.createElement('p'); empty.className = 'muted';
-    empty.textContent = 'No hay adendas publicadas para este convenio.';
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = 'No se han publicado adendas para este convenio.';
     section.append(empty);
   }
   for (const adenda of list) {
-    const item = document.createElement('div'); item.className = 'expanded-adenda';
-    const main = document.createElement('div');
+    const item = document.createElement('article');
+    item.className = 'expanded-adenda';
+    const header = document.createElement('div');
+    header.className = 'adenda-header';
     const name = document.createElement('strong');
-    name.textContent = `Adenda ${adenda.numero_adenda ?? adenda.id_adenda} · ${formatted(adenda.fecha_adenda)}`;
-    const msg = document.createElement('small'); msg.textContent = adenda.motivo_adenda || '';
-    main.append(name, msg);
-    const actions = document.createElement('div'); actions.className = 'expanded-actions';
-    appendAlerts(actions, adenda, 'adendas');
-    documentButtons(actions, adendaDocs(adenda, relations), 'Adenda firmada');
-    actions.append(makeButton('Ver adenda', 'link-action', () => showDetails(adenda, 'adendas')));
-    item.append(main, actions); section.append(item);
+    name.textContent = `Adenda ${adenda.numero_adenda ?? adenda.id_adenda}`;
+    const date = document.createElement('span');
+    date.className = 'adenda-date';
+    date.textContent = formatted(adenda.fecha_adenda);
+    header.append(name, date);
+    item.append(header);
+    if (adenda.motivo_adenda) {
+      const reason = document.createElement('p');
+      reason.className = 'adenda-reason';
+      reason.textContent = adenda.motivo_adenda;
+      item.append(reason);
+    }
+    // Si no hay alertas confirmadas, no mostrar etiquetas vacías.
+    appendAlerts(item, adenda, 'adendas', [], false);
+    const actions = document.createElement('div');
+    actions.className = 'adenda-footer';
+    const docs = adendaDocs(adenda, relations);
+    if (docs.length) documentButtons(actions, docs, 'Adenda firmada');
+    else {
+      const msg = document.createElement('small');
+      msg.className = 'muted';
+      msg.textContent = 'Sin PDF firmado publicado';
+      actions.append(msg);
+    }
+    actions.append(makeButton('Ver detalles', 'link-action', () => showDetails(adenda, 'adendas')));
+    item.append(actions);
+    section.append(item);
   }
-  panel.append(section);
+  return section;
 }
 async function mostrarPracticasConFoco(convenio, panel, focusPracticeId = null) {
   let page = 0;
@@ -613,24 +653,45 @@ function toggleExpedienteConvenio(row, tr, button) {
   td.append(panel); expanded.append(td); tr.after(expanded);
   button.setAttribute('aria-expanded', 'true'); button.textContent = 'Ocultar expediente';
 
-  const top = document.createElement('section'); top.className = 'expanded-doc-section';
-  const title = document.createElement('h4'); title.textContent = `Expediente ${row.id_convenio}`;
-  top.append(title);
-  renderFlags(top, alertasConvenio(row));
-  top.append(makeButton('Ver datos y avisos del convenio', 'link-action', () => showDetails(row, 'convenios')));
+  const top = document.createElement('section');
+  top.className = 'expanded-doc-section expediente-header';
+  const heading = document.createElement('div');
+  heading.className = 'expediente-heading';
+  const title = document.createElement('h4');
+  title.textContent = `Expediente ${row.id_convenio}`;
+  const company = document.createElement('p');
+  company.textContent = row.nombre_empresa || 'Convenio de la entidad';
+  heading.append(title, company);
+  top.append(heading);
+  const topFlags = alertasConvenio(row);
+  if (topFlags.length) renderFlags(top, topFlags);
+  top.append(makeButton('Ver datos y avisos', 'link-action', () => showDetails(row, 'convenios')));
   panel.append(top);
 
-  const documents = document.createElement('section'); documents.className = 'expanded-doc-section';
-  const docTitle = document.createElement('h4'); docTitle.textContent = 'Convenio firmado'; documents.append(docTitle);
+  const grid = document.createElement('div');
+  grid.className = 'expediente-doc-grid';
+  const documents = document.createElement('section');
+  documents.className = 'expanded-doc-section expediente-card expediente-convenio-pdf';
+  const docTitle = document.createElement('h4');
+  docTitle.textContent = 'Documento del convenio';
+  documents.append(docTitle);
   const relatedDocs = convenioDocs(row);
   if (relatedDocs.length) documentButtons(documents, relatedDocs, 'Convenio firmado');
-  else { const empty = document.createElement('p'); empty.className='muted'; empty.textContent='No hay PDF firmado publicado para este convenio.'; documents.append(empty); }
-  panel.append(documents);
-  renderAdendasConvenio(row, panel, state.pageRelations);
+  else {
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = 'No hay PDF firmado publicado para este convenio.';
+    documents.append(empty);
+  }
+  grid.append(documents, renderAdendasConvenio(row, state.pageRelations));
+  panel.append(grid);
 
-  const practices = document.createElement('section'); practices.className='expanded-doc-section';
-  const practicesArea = document.createElement('div'); practicesArea.className = 'practices-area';
-  practices.append(practicesArea); panel.append(practices);
+  const practices = document.createElement('section');
+  practices.className = 'expanded-doc-section expediente-card expediente-practicas';
+  const practicesArea = document.createElement('div');
+  practicesArea.className = 'practices-area';
+  practices.append(practicesArea);
+  panel.append(practices);
   void mostrarPracticasConFoco(row, practicesArea, focusPracticeId).catch((e) => practicesArea.replaceChildren(errorPanel(displayError(e))));
 }
 
@@ -768,12 +829,14 @@ async function loadPageRelations(section, rows, entityId) {
       (r) => add(relations.adendasByConvenio, r.id_convenio, r));
     queue('Incidencias de convenios', state.supabase.from('incidencias').select('*').eq('id_entidad', entityId).in('id_convenio', ids).limit(1000),
       (r) => add(relations.incByConvenio, r.id_convenio, r));
-    // Indicador de errores de prácticas dentro de cada convenio, sin cargar nombres.
-    queue('Errores de prácticas', state.supabase.from('practicas')
-      .select('id_convenio,id_practica,errores_activos')
-      .eq('id_entidad', entityId).in('id_convenio', ids)
-      .eq('errores_activos', true).limit(1000),
+    // SELECT * evita pedir una columna que no existe en public.practicas.
+    // Si el esquema aporta un indicador de error, úsalo; en los demás
+    // casos los avisos se derivan de incidencias con estado activo confirmado.
+    queue('Prácticas del expediente', state.supabase.from('practicas')
+      .select('*')
+      .eq('id_entidad', entityId).in('id_convenio', ids).limit(1000),
       (r) => {
+        if (!tieneErroresActivos(r)) return;
         const key = String(r.id_convenio);
         relations.activePracticesByConvenio.set(key, (relations.activePracticesByConvenio.get(key) || 0) + 1);
       });

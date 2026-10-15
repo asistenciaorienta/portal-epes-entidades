@@ -112,3 +112,82 @@
   .convenio-expanded-panel { padding:12px; }
   .convenio-expanded-pagination { align-items:flex-start; flex-direction:column; }
 }
+
+
+/* EPES V8.1 · Cabecera compacta: identidad y accesos en la misma fila. */
+[hidden] { display:none!important; }
+.entity-dashboard {
+  display:grid!important;
+  grid-template-columns:minmax(205px, .85fr) minmax(0, 2.15fr);
+  align-items:stretch; column-gap:20px; padding:15px 18px;
+}
+.entity-dashboard .entity-identity { min-width:0; display:flex; flex-direction:column; justify-content:center; gap:3px; }
+.entity-dashboard .entity-identity strong { font-size:clamp(15px,1.4vw,18px); line-height:1.4; overflow-wrap:anywhere; }
+.entity-dashboard .entity-identity .field-label { margin:0; }
+.entity-dashboard .entity-selector-group { margin-top:9px; align-items:flex-start; flex-direction:column; gap:4px; }
+.entity-dashboard .entity-selector-group select { max-width:100%; }
+.entity-dashboard .stats { margin:0!important; width:100%; grid-template-columns:repeat(2,minmax(0,1fr))!important; gap:12px; }
+.entity-dashboard .stat { min-height:94px; padding:12px 16px; border-radius:11px; }
+.entity-dashboard .stat-filter.is-selected { padding:11px 15px; }
+.entity-dashboard .stat strong { margin:5px 0 2px; font-size:clamp(23px,2.3vw,31px); }
+.entity-dashboard .stat small { font-size:11px; line-height:1.35; }
+.entity-dashboard .stat span { font-size:12px; }
+.entity-dashboard .stat-incidencias.has-incidents { background:linear-gradient(115deg,#fff0dc,#fff9ef); border-color:#db9b49; }
+.entity-dashboard .stat-incidencias.has-incidents:after { background:#cf7c0c; }
+.workspace { margin-top:16px; }
+
+/* Expediente organizado en tarjetas, con cabecera y tabla propia. */
+.convenio-expanded-row > td { padding:14px!important; background:#edf4f9!important; }
+.convenio-expanded-panel { display:flex; flex-direction:column; gap:15px; padding:18px!important; background:#f3f7fb; border:1px solid #d2e1ee; border-radius:13px; }
+.convenio-expanded-panel > .expanded-doc-section { padding:16px; }
+.expediente-header { background:linear-gradient(115deg,#edf5fd,#fff); border:1px solid #ccdeed; border-radius:11px; display:flex; align-items:center; flex-wrap:wrap; justify-content:space-between; gap:10px; }
+.expediente-heading { min-width:180px; flex:1; }
+.expediente-header h4 { margin:0 0 4px; font-size:17px; color:#1f5078; }
+.expediente-heading p { margin:0; color:#516879; font-size:12px; line-height:1.5; overflow-wrap:anywhere; }
+.expediente-header .record-badges { flex:1; }
+.expediente-header .link-action { white-space:normal; }
+.expediente-doc-grid { display:grid; grid-template-columns:minmax(0,.9fr) minmax(0,1.45fr); gap:15px; align-items:stretch; }
+.expediente-card { min-width:0; background:#fff; border:1px solid #dce6ef!important; border-radius:12px; padding:17px!important; box-shadow:0 2px 9px rgba(31,80,120,.05); }
+.expediente-card h4 { color:#1f5078; font-size:14px; margin:0 0 12px; }
+.expediente-convenio-pdf { border-top:4px solid #a7c741!important; }
+.expediente-adendas { border-top:4px solid #6796ba!important; }
+.expediente-practicas { border-top:4px solid #1f5078!important; }
+.expediente-file { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; padding:10px; background:#f6f9fc; border:1px solid #e0eaf0; border-radius:9px; max-width:100%; }
+.expediente-file-info { display:flex; align-items:center; flex:1; min-width:170px; gap:9px; }
+.expediente-file-icon { flex:none; display:inline-flex; align-items:center; justify-content:center; background:#e1eaf3; border-radius:6px; color:#245276; width:35px; height:38px; font-weight:850; font-size:10px; }
+.expediente-file-name { font-size:12px; line-height:1.45; min-width:0; overflow-wrap:anywhere; color:#294d68; font-weight:650; }
+.expediente-file .pdf-download { margin:0; max-width:100%; justify-content:center; }
+.expediente-adendas .expanded-adenda { display:block; margin:0 0 10px; padding:13px; border:1px solid #dfebf3; background:#f8fafc; border-radius:10px; min-width:0; }
+.expediente-adendas .expanded-adenda:last-child { margin-bottom:0; }
+.adenda-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px 12px; }
+.adenda-header strong { color:#194e78; font-weight:800; font-size:13px; }
+.adenda-date { font-size:11px; font-weight:750; color:#496982; padding:3px 9px; background:#e9f1f8; border-radius:8px; }
+.adenda-reason { margin:9px 0 11px; padding-left:11px; border-left:3px solid #bdd2e5; line-height:1.5; font-size:12px; color:#354e63; overflow-wrap:anywhere; }
+.adenda-footer { display:flex; align-items:center; gap:9px 14px; flex-wrap:wrap; margin-top:10px; }
+.adenda-footer .expediente-file { flex:1 1 300px; }
+.adenda-footer .link-action { flex:none; white-space:normal; }
+.expanded-adenda > .record-badges { margin:6px 0 8px; }
+.practica-inline-wrap { border:1px solid #dbe6ef!important; background:#fff; }
+.expediente-practicas .convenio-expanded-head { margin-bottom:13px; }
+.expediente-practicas .convenio-expanded-head strong { font-size:14px; }
+
+@media (max-width:1080px) {
+  .entity-dashboard { grid-template-columns:minmax(185px,.8fr) minmax(0,2fr); gap:14px; }
+  .expediente-doc-grid { grid-template-columns:1fr; }
+}
+@media (max-width:750px) {
+  .entity-dashboard { grid-template-columns:1fr; gap:12px; padding:14px; }
+  .entity-dashboard .entity-identity { border-bottom:1px solid #e4ebf2; padding-bottom:10px; }
+  .entity-dashboard .stats { grid-template-columns:repeat(2,minmax(0,1fr))!important; }
+  .entity-dashboard .stat { min-height:96px; padding:12px; }
+  .entity-dashboard .stat-filter.is-selected { padding:11px; }
+  .convenio-expanded-panel { padding:10px!important; gap:10px; }
+  .convenio-expanded-row > td { padding:6px!important; }
+  .expediente-header { align-items:flex-start; }
+  .expediente-card { padding:12px!important; }
+}
+@media (max-width:420px) {
+  .entity-dashboard .stat strong { font-size:25px; }
+  .entity-dashboard .stat small { font-size:10px; }
+  .adenda-footer .expediente-file { flex:1 1 100%; }
+}

@@ -238,3 +238,31 @@
   }
   #dashboard-view > .entity-dashboard { margin-top:16px; }
 }
+
+
+/* EPES V8.3 · Espacio entre entidad autorizada y búsqueda general. */
+#dashboard-view > .entity-dashboard {
+  margin-bottom:clamp(20px, 2.5vw, 34px)!important;
+}
+#dashboard-view > .search-panel { margin-top:0!important; }
+/* Acceso a la herramienta general en la cabecera del buscador. */
+.search-heading-tools {
+  display:flex; flex:0 1 295px; min-width:0; flex-direction:column;
+  align-items:flex-end; justify-content:center; gap:6px;
+}
+.search-heading-tools .epes-external-tool {
+  max-width:100%; text-align:center; display:inline-flex; flex-wrap:wrap;
+  align-items:center; justify-content:center; gap:8px; white-space:normal;
+  text-decoration:none; line-height:1.3; padding:12px 14px;
+}
+.search-heading-tools small {
+  color:#52697d; font-size:11px; text-align:right; line-height:1.4;
+}
+@media(max-width:750px) {
+  .search-heading { flex-wrap:wrap; gap:12px; }
+  .search-heading-tools {
+    flex:1 1 100%; align-items:stretch;
+  }
+  .search-heading-tools small { text-align:center; }
+  #dashboard-view > .entity-dashboard { margin-bottom:22px!important; }
+}

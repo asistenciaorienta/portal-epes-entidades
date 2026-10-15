@@ -6,9 +6,9 @@
   <meta name="color-scheme" content="light" />
   <meta name="referrer" content="no-referrer" />
   <title>Portal EPES Entidades · Granada</title>
-  <link rel="stylesheet" href="./styles.css?v=epes-v8-2-20261015" />
-  <link rel="stylesheet" href="./styles-v8.css?v=epes-v8-2-20261015" />
-  <script type="module" src="./app.js?v=epes-v8-2-20261015"></script>
+  <link rel="stylesheet" href="./styles.css?v=epes-v8-3-20261015" />
+  <link rel="stylesheet" href="./styles-v8.css?v=epes-v8-3-20261015" />
+  <script type="module" src="./app.js?v=epes-v8-3-20261015"></script>
 </head>
 <body>
   <div class="page-glow" aria-hidden="true"></div>
@@ -71,7 +71,13 @@
       </div>
       <p id="global-message" class="notice" hidden role="status"></p>
       <section class="search-panel" aria-labelledby="search-title">
-        <div class="search-heading"><div><p class="eyebrow">BÚSQUEDA GENERAL</p><h2 id="search-title">Buscar información de la entidad</h2><p class="muted">Busca por convenio, empresa, CIF, código de práctica o nombre de participante. Abriremos su expediente correspondiente.</p></div><span class="search-hint">Búsqueda protegida</span></div>
+        <div class="search-heading">
+          <div><p class="eyebrow">BÚSQUEDA GENERAL</p><h2 id="search-title">Buscar información de la entidad</h2><p class="muted">Busca por convenio, empresa, CIF, código de práctica o nombre de participante. Abriremos su expediente correspondiente.</p></div>
+          <div class="search-heading-tools">
+            <a class="btn btn-secondary epes-external-tool" href="https://asistenciaorienta.github.io/EPES_Granada/" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" aria-label="Abrir la herramienta Consulta de convenios EPES Granada en otra pestaña">Consulta general de convenios <span aria-hidden="true">↗</span></a>
+            <small>Herramienta independiente · se abre en otra pestaña</small>
+          </div>
+        </div>
         <form id="global-search-form" class="search-form" role="search">
           <label class="sr-only" for="global-search-input">Texto que deseas buscar</label>
           <input id="global-search-input" type="search" placeholder="Convenio, empresa, CIF, práctica o participante…" maxlength="80" autocomplete="off" />

@@ -2,7 +2,7 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './config.js';
 import { downloadEphemeralPdf } from './download-on-demand.js';
 
-// V8.1: ficha visual del expediente; corrección de consulta prácticas; descargas V7 intactas.
+// V8.3: acceso a herramienta independiente, desglose prudente de incidencias; descargas V7 intactas.
 // V7: descarga bajo demanda para todos los documentos firmados visibles.
 // Autorización efectiva: Supabase Auth + RPC + RLS; no existe acceso anónimo.
 // El portal NO recurre automáticamente al bucket permanente si falla el circuito.
@@ -204,6 +204,34 @@ function markActiveTab() {
   }
 }
 
+// El contador de incidencias es HISTÓRICO: incluye pendientes y resueltas.
+// Cuando el volumen de la entidad es manejable, calculamos el desglose con
+// las mismas reglas prudentes de estado que utiliza el detalle del expediente.
+async function contarEstadosIncidencias(entityId, total) {
+  const PAGE = 500;
+  const MAX_ROWS = 2500;
+  if (total > MAX_ROWS) return null;
+  let pendientes = 0, resueltas = 0, indeterminadas = 0, leidas = 0;
+  for (let from = 0; from < total; from += PAGE) {
+    const to = Math.min(from + PAGE, total) - 1;
+    const { data, error } = await state.supabase.from('incidencias')
+      .select('*').eq('id_entidad', entityId)
+      .order('id_incidencia', { ascending: true })
+      .range(from, to);
+    if (error) throw error;
+    for (const inc of data || []) {
+      const status = incidenciaActiva(inc);
+      if (status === true) pendientes++;
+      else if (status === false) resueltas++;
+      else indeterminadas++;
+    }
+    leidas += data?.length || 0;
+    if ((data?.length || 0) < to - from + 1) break;
+  }
+  // Si la tabla cambió durante la consulta, no mostrar un desglose inexacto.
+  return leidas === total ? { pendientes, resueltas, indeterminadas } : null;
+}
+
 async function loadCounts() {
   const entityId = state.entity;
   const metrics = ['convenios', 'incidencias'];
@@ -222,13 +250,37 @@ async function loadCounts() {
     else { failed = true; el(`count-${metrics[i]}`).textContent = '—'; }
   }
   const resultIncidencias = results[metrics.indexOf('incidencias')];
-  const hayIncidencias = resultIncidencias.status === 'fulfilled' && resultIncidencias.value > 0;
-  // Ámbar: existen incidencias registradas, aunque puedan estar resueltas.
-  // No confundimos el histórico con un error activo del expediente.
-  el('count-incidencias').closest('.stat').classList.toggle('has-incidents', hayIncidencias);
-  el('incidencias-caption').textContent = hayIncidencias
-    ? `${resultIncidencias.value.toLocaleString('es-ES')} incidencia${resultIncidencias.value === 1 ? '' : 's'} registrada${resultIncidencias.value === 1 ? '' : 's'} · consultar`
-    : 'Sin incidencias registradas';
+  const tarjeta = el('count-incidencias').closest('.stat');
+  const pie = el('incidencias-caption');
+  tarjeta.classList.remove('has-incidents');
+  if (resultIncidencias.status === 'fulfilled') {
+    const total = resultIncidencias.value;
+    if (!total) {
+      pie.textContent = 'Sin incidencias registradas';
+    } else {
+      pie.textContent = `${total.toLocaleString('es-ES')} registradas en total (pendientes y gestionadas)`;
+      try {
+        const estados = await contarEstadosIncidencias(entityId, total);
+        if (entityId !== state.entity || !state.user) return;
+        if (estados) {
+          const { pendientes, resueltas, indeterminadas } = estados;
+          const partes = [
+            `${pendientes.toLocaleString('es-ES')} pendiente${pendientes === 1 ? '' : 's'}`,
+            `${resueltas.toLocaleString('es-ES')} resuelta${resueltas === 1 ? '' : 's'}`
+          ];
+          if (indeterminadas) partes.push(`${indeterminadas.toLocaleString('es-ES')} sin estado confirmado`);
+          pie.textContent = partes.join(' · ');
+          // La alerta visual refleja pendientes confirmadas, no el histórico.
+          tarjeta.classList.toggle('has-incidents', pendientes > 0);
+        }
+      } catch (error) {
+        // El total histórico sigue siendo fiable aunque el desglose falle.
+        console.warn('EPES: no se pudo calcular el desglose de incidencias:', displayError(error));
+      }
+    }
+  } else {
+    pie.textContent = 'No se pudo consultar el estado de las incidencias';
+  }
   if (failed) showMessage('No se han podido cargar todos los contadores. Comprueba tu conexión o tus permisos.', true);
 }
 
@@ -268,11 +320,12 @@ function tieneErroresActivos(row) {
 }
 // Una incidencia histórica no equivale por sí misma a un error pendiente.
 function incidenciaActiva(inc) {
-  if (inc.resuelta === true || inc.fecha_resolucion) return false;
-  if (inc.resuelta === false) return true;
   const status = String(inc.estado || inc.situacion || '').toLowerCase().trim();
-  if (['resuelta','resuelto','cerrada','cerrado','solucionada','solucionado','finalizada','finalizado'].includes(status)) return false;
-  if (['abierta','abierto','pendiente','sin resolver','en curso','activa','activo'].includes(status)) return true;
+  // Cualquier cierre expreso prevalece sobre un indicador antiguo «resuelta=false».
+  if (inc.resuelta === true || inc.fecha_resolucion ||
+      ['resuelta','resuelto','cerrada','cerrado','solucionada','solucionado','finalizada','finalizado'].includes(status)) return false;
+  if (inc.resuelta === false ||
+      ['abierta','abierto','pendiente','sin resolver','en curso','activa','activo'].includes(status)) return true;
   return null;
 }
 function alertasRegistro(row, section, incidencias = []) {

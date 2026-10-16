@@ -2,7 +2,7 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './config.js';
 import { downloadEphemeralPdf } from './download-on-demand.js';
 
-// V8.8: petición de recuperación de contraseña por correo; mantiene íntegra la lógica V8.7.
+// V8.7.1: identifica empresa y participante en los avisos existentes.
 // V8.7: aviso de práctica nueva al insertarse por primera vez en Supabase.
 // V8.6: novedades por usuario y entidad, confirmación persistente en Supabase.
 // V8.5: bandeja de incidencias pendientes con 6 columnas y empresa resuelta por convenio; histórico y descargas V7 intactos.
@@ -221,6 +221,51 @@ function avisoDescripcion(row) {
      row.id_convenio ? ` · Convenio ${row.id_convenio}` : '');
 }
 
+// Los avisos solo guardan códigos. Obtenemos datos actuales de los expedientes
+// mediante las mismas políticas RLS que utiliza el resto del portal.
+// No añadimos datos personales a la tabla de notificaciones ni alteramos el sincronizador.
+async function enriquecerNovedades(rows, idEntidad) {
+  if (!rows.length) return rows;
+  const idsPracticas = [...new Set(rows.map(row =>
+    row.id_practica || (row.tipo === 'practica_nueva' ? row.referencia : null)
+  ).filter(Boolean))];
+  const practicas = new Map();
+  if (idsPracticas.length) {
+    const { data, error } = await state.supabase.from('practicas')
+      .select('id_practica,id_convenio,persona_usuaria')
+      .eq('id_entidad', idEntidad)
+      .in('id_practica', idsPracticas);
+    if (error) console.warn('EPES: no se pudo completar el contexto de prácticas:', displayError(error));
+    else for (const p of data || []) practicas.set(String(p.id_practica), p);
+  }
+  const idsConvenios = [...new Set(rows.map(row => {
+    const idPractica = row.id_practica || (row.tipo === 'practica_nueva' ? row.referencia : null);
+    return row.id_convenio || practicas.get(String(idPractica))?.id_convenio || null;
+  }).filter(Boolean))];
+  const convenios = new Map();
+  if (idsConvenios.length) {
+    const { data, error } = await state.supabase.from('convenios')
+      .select('id_convenio,nombre_empresa')
+      .eq('id_entidad', idEntidad)
+      .in('id_convenio', idsConvenios);
+    if (error) console.warn('EPES: no se pudo completar el contexto de convenios:', displayError(error));
+    else for (const c of data || []) convenios.set(String(c.id_convenio), c);
+  }
+  return rows.map(row => {
+    const idPractica = row.id_practica || (row.tipo === 'practica_nueva' ? row.referencia : null);
+    const practica = practicas.get(String(idPractica));
+    const idConvenio = row.id_convenio || practica?.id_convenio || null;
+    const empresa = convenios.get(String(idConvenio))?.nombre_empresa;
+    return {
+      ...row,
+      id_convenio: idConvenio,
+      empresa_aviso: typeof empresa === 'string' ? empresa.trim() : '',
+      participante_aviso: typeof practica?.persona_usuaria === 'string'
+        ? practica.persona_usuaria.trim() : ''
+    };
+  });
+}
+
 async function abrirExpedienteAviso(row) {
   if (!state.entity || !state.user) return;
   const entityId = state.entity;
@@ -271,6 +316,26 @@ async function marcarAvisoVisto(row, input, tarjeta) {
   }
 }
 
+function contextoAviso(row) {
+  const contexto = document.createElement('div');
+  contexto.className = 'epes-news-context';
+  const dato = (etiqueta, valor) => {
+    const item = document.createElement('div');
+    item.className = 'epes-news-context-item';
+    const nombre = document.createElement('strong');
+    nombre.textContent = `${etiqueta}:`;
+    const contenido = document.createElement('span');
+    contenido.textContent = valor;
+    item.append(nombre, contenido);
+    contexto.append(item);
+  };
+  dato('Empresa', row.empresa_aviso || 'No disponible en el convenio');
+  // No todos los avisos se refieren a una práctica. Si no existe una
+  // persona identificada en esa práctica, no mostramos un campo vacío.
+  if (row.participante_aviso) dato('Participante', row.participante_aviso);
+  return contexto;
+}
+
 function renderNovedades(rows) {
   const panel = el('news-panel');
   const list = el('news-list');
@@ -319,7 +384,7 @@ function renderNovedades(rows) {
     label.textContent = 'Ya lo he visto · No volver a mostrar';
     marcar.append(input,label);
     acciones.append(marcar);
-    contenido.append(cab,descripcion,acciones);
+    contenido.append(cab,descripcion,contextoAviso(row),acciones);
     item.append(icono,contenido);
     list.append(item);
   }
@@ -337,7 +402,9 @@ async function loadNovedades() {
     });
     if (error) throw error;
     if (req !== state.novRequestId || entityId !== state.entity || userId !== state.user?.id) return;
-    renderNovedades(data || []);
+    const avisosEnriquecidos = await enriquecerNovedades(data || [], entityId);
+    if (req !== state.novRequestId || entityId !== state.entity || userId !== state.user?.id) return;
+    renderNovedades(avisosEnriquecidos);
   } catch (error) {
     if (req !== state.novRequestId || entityId !== state.entity || userId !== state.user?.id) return;
     el('news-panel').hidden = false;
@@ -1368,49 +1435,7 @@ async function globalSearch(event) {
   }
 }
 
-function initPasswordReset() {
-  const toggle = el('password-reset-toggle');
-  const form = el('password-reset-form');
-  const status = el('password-reset-status');
-  const submit = el('password-reset-submit');
-  toggle.addEventListener('click', () => {
-    const opening = form.hidden;
-    form.hidden = !opening;
-    toggle.setAttribute('aria-expanded', String(opening));
-    if (opening) {
-      el('password-reset-email').value = el('email').value.trim();
-      el('password-reset-email').focus();
-    } else {
-      status.textContent = '';
-    }
-  });
-  form.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    status.textContent = '';
-    if (!state.supabase) {
-      status.textContent = 'La conexión de autenticación no está disponible.';
-      return;
-    }
-    const email = el('password-reset-email').value.trim();
-    if (!email) return;
-    submit.disabled = true;
-    try {
-      const redirectTo = new URL('./establecer-clave.html?tipo=recuperacion', location.href).href;
-      const { error } = await state.supabase.auth.resetPasswordForEmail(email, { redirectTo });
-      if (error) throw error;
-      status.textContent = 'Si existe una cuenta con ese correo, recibirás un enlace para establecer una nueva contraseña. Revisa también la carpeta de spam.';
-    } catch (error) {
-      // No desvelar a terceros la existencia o el estado de una cuenta.
-      console.warn('No se pudo iniciar la recuperación de clave:', error?.status || 'error');
-      status.textContent = 'No ha sido posible solicitar el enlace. Inténtalo más tarde o contacta con la administración del programa.';
-    } finally {
-      submit.disabled = false;
-    }
-  });
-}
-
 function initEvents() {
-  initPasswordReset();
   el('login-form').addEventListener('submit', async (event) => {
     event.preventDefault();
     const button = el('login-button');

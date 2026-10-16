@@ -2,6 +2,7 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './config.js';
 import { downloadEphemeralPdf } from './download-on-demand.js';
 
+// V8.7: aviso de práctica nueva al insertarse por primera vez en Supabase.
 // V8.6: novedades por usuario y entidad, confirmación persistente en Supabase.
 // V8.5: bandeja de incidencias pendientes con 6 columnas y empresa resuelta por convenio; histórico y descargas V7 intactos.
 // V7: descarga bajo demanda para todos los documentos firmados visibles.
@@ -200,12 +201,19 @@ function avisoTitulo(row) {
       ? 'Nueva adenda firmada disponible'
       : 'Nuevo convenio firmado disponible';
   }
-  return 'Incidencia resuelta';
+  if (row.tipo === 'practica_nueva') return 'Nueva práctica incorporada';
+  if (row.tipo === 'incidencia_resuelta') return 'Incidencia resuelta';
+  return 'Novedad de tu entidad';
 }
 function avisoDescripcion(row) {
   if (row.tipo === 'documento_firmado') {
     const convenio = row.id_convenio ? ` · Convenio ${row.id_convenio}` : '';
     return `${row.nombre_archivo || row.referencia}${convenio}`;
+  }
+  if (row.tipo === 'practica_nueva') {
+    return `Práctica ${row.id_practica || row.referencia}` +
+      (row.id_convenio ? ` · Convenio ${row.id_convenio}` : '') +
+      '. Revisa sus datos en el expediente.';
   }
   return `Incidencia ${row.referencia}` +
     (row.id_practica ? ` · Práctica ${row.id_practica}` :
@@ -275,7 +283,7 @@ function renderNovedades(rows) {
     const icono = document.createElement('span');
     icono.className = 'epes-news-icon';
     icono.setAttribute('aria-hidden','true');
-    icono.textContent = row.tipo === 'documento_firmado' ? '📄' : '✓';
+    icono.textContent = row.tipo === 'documento_firmado' ? '📄' : row.tipo === 'practica_nueva' ? '📋' : '✓';
     const contenido = document.createElement('div');
     contenido.className = 'epes-news-body';
     const cab = document.createElement('div');

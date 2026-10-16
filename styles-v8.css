@@ -359,3 +359,7 @@
 .epes-news-ack input:disabled { cursor:wait; }
 .epes-news-status:not(:empty) { padding:6px 0 11px; font-size:12px; color:#ab542b; }
 @media(max-width:580px) { .epes-news-panel { padding:15px; } .epes-news-item { padding:12px 10px; gap:9px; } .epes-news-actions { align-items:flex-start; flex-direction:column; } }
+
+/* V8.7 · Diferenciar las nuevas prácticas en la bandeja de novedades. */
+.epes-news-practica_nueva { background:#f1f7fc; border-color:#c8ddea; }
+.epes-news-practica_nueva .epes-news-icon { background:#dcecf8; color:#1f5078; }

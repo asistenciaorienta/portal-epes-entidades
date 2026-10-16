@@ -6,9 +6,9 @@
   <meta name="color-scheme" content="light" />
   <meta name="referrer" content="no-referrer" />
   <title>Portal EPES Entidades · Granada</title>
-  <link rel="stylesheet" href="./styles.css?v=epes-v8-7-20261015" />
-  <link rel="stylesheet" href="./styles-v8.css?v=epes-v8-7-20261015" />
-  <script type="module" src="./app.js?v=epes-v8-7-20261015"></script>
+  <link rel="stylesheet" href="./styles.css?v=epes-v8-8-20261016" />
+  <link rel="stylesheet" href="./styles-v8.css?v=epes-v8-8-20261016" />
+  <script type="module" src="./app.js?v=epes-v8-8-20261016"></script>
 </head>
 <body>
   <div class="page-glow" aria-hidden="true"></div>
@@ -50,6 +50,15 @@
           <p id="login-error" class="form-error" hidden role="alert"></p>
           <button class="btn btn-primary login-submit" type="submit" id="login-button">Entrar al portal <span aria-hidden="true">→</span></button>
         </form>
+        <div class="epes-password-help">
+          <button type="button" class="epes-link-action" id="password-reset-toggle" aria-controls="password-reset-form" aria-expanded="false">¿Has olvidado tu contraseña?</button>
+          <form id="password-reset-form" class="epes-password-reset-form" hidden>
+            <label for="password-reset-email">Correo electrónico de tu cuenta</label>
+            <input id="password-reset-email" type="email" autocomplete="email" required placeholder="tu.correo@entidad.es" />
+            <button type="submit" class="btn btn-secondary" id="password-reset-submit">Enviar enlace de recuperación</button>
+            <p class="epes-password-reset-status" id="password-reset-status" role="status" aria-live="polite"></p>
+          </form>
+        </div>
         <div class="privacy-hint"><span aria-hidden="true">🔒</span> Acceso restringido. La identificación se realiza mediante Supabase Auth y los permisos se verifican para cada entidad.</div>
       </div>
     </section>

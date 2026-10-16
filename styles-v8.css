@@ -363,3 +363,19 @@
 /* V8.7 · Diferenciar las nuevas prácticas en la bandeja de novedades. */
 .epes-news-practica_nueva { background:#f1f7fc; border-color:#c8ddea; }
 .epes-news-practica_nueva .epes-news-icon { background:#dcecf8; color:#1f5078; }
+
+/* V8.8 · Solicitud de recuperación de acceso */
+.epes-password-help { margin-top: 16px; display: grid; gap: 12px; }
+.epes-link-action { width: fit-content; background: none; border: 0; padding: 4px 0; font: inherit; text-decoration: underline; cursor: pointer; color: #154e6d; font-weight: 650; }
+.epes-link-action:hover { color: #0b324c; }
+.epes-link-action:focus-visible { outline: 2px solid #135e7f; outline-offset: 4px; }
+.epes-password-reset-form:not([hidden]) { display: grid; gap: 10px; border-radius: 12px; padding: 15px; background: #f1f7f9; }
+.epes-password-reset-form label { font-size: 0.91rem; font-weight: 650; }
+.epes-password-reset-form input { width: 100%; }
+.epes-password-reset-form button { justify-self: start; }
+.epes-password-reset-status { margin: 0; font-size: 0.89rem; line-height: 1.45; }
+.epes-recover-shell { max-width: 550px; margin: 5vh auto; }
+.epes-recover-shell .login-card { max-width: none; width: 100%; }
+.epes-recover-form { display: grid; gap: 12px; }
+.epes-recover-form:not([hidden]) { display: grid; }
+.epes-recover-shell .form-error { margin: 8px 0; }

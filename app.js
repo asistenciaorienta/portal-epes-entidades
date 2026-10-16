@@ -2,6 +2,7 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './config.js';
 import { downloadEphemeralPdf } from './download-on-demand.js';
 
+// V8.8: petición de recuperación de contraseña por correo; mantiene íntegra la lógica V8.7.
 // V8.7: aviso de práctica nueva al insertarse por primera vez en Supabase.
 // V8.6: novedades por usuario y entidad, confirmación persistente en Supabase.
 // V8.5: bandeja de incidencias pendientes con 6 columnas y empresa resuelta por convenio; histórico y descargas V7 intactos.
@@ -1367,7 +1368,49 @@ async function globalSearch(event) {
   }
 }
 
+function initPasswordReset() {
+  const toggle = el('password-reset-toggle');
+  const form = el('password-reset-form');
+  const status = el('password-reset-status');
+  const submit = el('password-reset-submit');
+  toggle.addEventListener('click', () => {
+    const opening = form.hidden;
+    form.hidden = !opening;
+    toggle.setAttribute('aria-expanded', String(opening));
+    if (opening) {
+      el('password-reset-email').value = el('email').value.trim();
+      el('password-reset-email').focus();
+    } else {
+      status.textContent = '';
+    }
+  });
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    status.textContent = '';
+    if (!state.supabase) {
+      status.textContent = 'La conexión de autenticación no está disponible.';
+      return;
+    }
+    const email = el('password-reset-email').value.trim();
+    if (!email) return;
+    submit.disabled = true;
+    try {
+      const redirectTo = new URL('./establecer-clave.html?tipo=recuperacion', location.href).href;
+      const { error } = await state.supabase.auth.resetPasswordForEmail(email, { redirectTo });
+      if (error) throw error;
+      status.textContent = 'Si existe una cuenta con ese correo, recibirás un enlace para establecer una nueva contraseña. Revisa también la carpeta de spam.';
+    } catch (error) {
+      // No desvelar a terceros la existencia o el estado de una cuenta.
+      console.warn('No se pudo iniciar la recuperación de clave:', error?.status || 'error');
+      status.textContent = 'No ha sido posible solicitar el enlace. Inténtalo más tarde o contacta con la administración del programa.';
+    } finally {
+      submit.disabled = false;
+    }
+  });
+}
+
 function initEvents() {
+  initPasswordReset();
   el('login-form').addEventListener('submit', async (event) => {
     event.preventDefault();
     const button = el('login-button');

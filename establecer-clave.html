@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="referrer" content="no-referrer" />
+  <meta name="color-scheme" content="light" />
+  <title>Establecer contraseña · EPES Entidades Granada</title>
+  <link rel="stylesheet" href="./styles.css?v=epes-v8-8-20261016" />
+  <link rel="stylesheet" href="./styles-v8.css?v=epes-v8-8-20261016" />
+  <script type="module" src="./establecer-clave.js?v=epes-v8-8-20261016"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header-inner container">
+      <a class="identity" href="./"><span class="identity-mark"><span class="identity-fallback">EPES</span></span><span><strong>Portal EPES Entidades · Granada</strong><small>Servicio Andaluz de Empleo</small></span></a>
+    </div>
+  </header>
+  <main class="container main-content">
+    <div class="epes-recover-shell">
+      <div class="login-card">
+        <div class="card-kicker">GESTIÓN SEGURA DE ACCESO</div>
+        <h1 id="recovery-title">Establecer contraseña</h1>
+        <p class="muted" id="recovery-description">Comprobando el enlace de acceso…</p>
+        <form class="epes-recover-form" id="recovery-form" hidden>
+          <label for="new-password">Nueva contraseña</label>
+          <input id="new-password" type="password" required minlength="12" autocomplete="new-password" placeholder="Al menos 12 caracteres" />
+          <label for="confirm-password">Repite la contraseña</label>
+          <input id="confirm-password" type="password" required minlength="12" autocomplete="new-password" placeholder="Repite la contraseña" />
+          <button type="submit" id="save-password" class="btn btn-primary">Guardar contraseña</button>
+        </form>
+        <p id="recovery-status" role="status" aria-live="polite"></p>
+        <p><a href="./">Volver al portal EPES</a></p>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

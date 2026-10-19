@@ -6,9 +6,9 @@
   <meta name="color-scheme" content="light" />
   <meta name="referrer" content="no-referrer" />
   <title>Portal EPES Entidades · Granada</title>
-  <link rel="stylesheet" href="./styles.css?v=epes-v8-9-20261016" />
-  <link rel="stylesheet" href="./styles-v8.css?v=epes-v8-9-20261016" />
-  <script type="module" src="./app.js?v=epes-v8-9-20261016"></script>
+  <link rel="stylesheet" href="./styles.css?v=epes-v9-0-clave-20261016" />
+  <link rel="stylesheet" href="./styles-v8.css?v=epes-v9-0-clave-20261016" />
+  <script type="module" src="./app.js?v=epes-v9-0-clave-20261016"></script>
 </head>
 <body>
   <div class="page-glow" aria-hidden="true"></div>
@@ -60,6 +60,23 @@
           </form>
         </div>
         <div class="privacy-hint"><span aria-hidden="true">🔒</span> Acceso restringido. La identificación se realiza mediante Supabase Auth y los permisos se verifican para cada entidad.</div>
+      </div>
+    </section>
+
+    <section id="change-password-view" class="login-shell" hidden>
+      <div class="login-intro"><p class="eyebrow">PRIMER ACCESO</p><h1>Establece tu contraseña personal</h1>
+        <p>Antes de consultar los expedientes, debes sustituir la clave temporal que has recibido.</p></div>
+      <div class="login-card"><div class="card-kicker">SEGURIDAD DE LA CUENTA</div>
+        <h2>Cambio obligatorio de contraseña</h2>
+        <form id="change-password-form" autocomplete="off">
+          <label for="change-password-new">Nueva contraseña (12 caracteres como mínimo)</label>
+          <input id="change-password-new" type="password" minlength="12" autocomplete="new-password" required />
+          <label for="change-password-confirm">Repite la nueva contraseña</label>
+          <input id="change-password-confirm" type="password" minlength="12" autocomplete="new-password" required />
+          <p id="change-password-status" role="status" class="form-error"></p>
+          <button id="change-password-submit" class="btn btn-primary" type="submit">Guardar contraseña y entrar</button>
+          <button id="change-password-exit" class="btn btn-secondary" type="button">Cerrar sesión</button>
+        </form>
       </div>
     </section>
 

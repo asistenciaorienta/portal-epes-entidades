@@ -90,6 +90,7 @@ function showLogin(message = '') {
   ++state.detailRequestId;
   if (el('detail-dialog').open) el('detail-dialog').close();
   el('dashboard-view').hidden = true;
+  el('change-password-view').hidden = true;
   el('login-view').hidden = false;
   el('top-header-actions').hidden = true;
   el('header-label').hidden = false;
@@ -98,6 +99,7 @@ function showLogin(message = '') {
   if (!message) el('password').value = '';
 }
 function showDashboard() {
+  el('change-password-view').hidden = true;
   el('login-view').hidden = true;
   el('dashboard-view').hidden = false;
   el('top-header-actions').hidden = false;
@@ -152,10 +154,21 @@ function emptyPanel() {
 async function applyUser(user) {
   const db = state.supabase;
   const { data: profile, error: profileError } = await db.from('perfiles')
-    .select('id,nombre,email,activo').eq('id', user.id).maybeSingle();
+    .select('id,nombre,email,activo,debe_cambiar_clave').eq('id', user.id).maybeSingle();
   if (profileError) throw profileError;
   if (!profile || profile.activo !== true) {
     throw new Error('Tu perfil no está activo. Contacta con la persona responsable de EPES.');
+  }
+  if (profile.debe_cambiar_clave === true) {
+    state.user = user;
+    el('login-view').hidden = true;
+    el('dashboard-view').hidden = true;
+    el('top-header-actions').hidden = true;
+    el('change-password-view').hidden = false;
+    el('change-password-new').value = '';
+    el('change-password-confirm').value = '';
+    el('change-password-status').textContent = '';
+    return;
   }
   const { data: assignments, error: assignmentsError } = await db.from('perfil_entidades')
     .select('id_entidad').eq('user_id', user.id).order('id_entidad');
@@ -1479,6 +1492,32 @@ function initPasswordReset() {
 
 function initEvents() {
   initPasswordReset();
+  el('change-password-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const newPassword = el('change-password-new').value;
+    const confirmPassword = el('change-password-confirm').value;
+    const status = el('change-password-status');
+    const submit = el('change-password-submit');
+    if (newPassword.length < 12) { status.textContent = 'Utiliza al menos 12 caracteres.'; return; }
+    if (newPassword !== confirmPassword) { status.textContent = 'Las contraseñas no coinciden.'; return; }
+    if (!state.supabase || !state.user) return;
+    submit.disabled = true;
+    status.textContent = 'Guardando contraseña personal…';
+    try {
+      const { error } = await state.supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      // El disparador en auth.users borra debe_cambiar_clave. No hay RPC de autoconfirmación.
+      const { data: current, error: currentError } = await state.supabase.auth.getUser();
+      if (currentError || !current?.user) throw currentError || new Error('No se ha validado la sesión.');
+      await applyUser(current.user);
+      if (!el('change-password-view').hidden) throw new Error('El cambio sigue pendiente de confirmación. Contacta con la administración.');
+    } catch (error) { status.textContent = displayError(error); }
+    finally { submit.disabled = false; }
+  });
+  el('change-password-exit').addEventListener('click', async () => {
+    await state.supabase.auth.signOut();
+    showLogin();
+  });
   el('login-form').addEventListener('submit', async (event) => {
     event.preventDefault();
     const button = el('login-button');
